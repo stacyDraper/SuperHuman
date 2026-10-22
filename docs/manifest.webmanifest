@@ -1,0 +1,11 @@
+{
+  "name": "when fire",
+  "short_name": "when fire",
+  "description": "What I said I would do, and what happened.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#16201d",
+  "theme_color": "#16201d",
+  "icons": [{ "src": "./icon-512.png", "sizes": "512x512", "type": "image/png" }]
+}

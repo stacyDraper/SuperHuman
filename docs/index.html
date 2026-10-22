@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>when fire</title>
+  <meta name="description" content="What I said I would do, and what happened.">
+  <meta name="theme-color" content="#16201d">
+  <meta name="when-fire-connector" content="https://xmdrzegrkjdeibvxihih.supabase.co/functions/v1/when-fire-mcp">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="when fire">
+  <link rel="apple-touch-icon" href="./icon-512.png">
+  <link rel="icon" href="./icon-512.png" type="image/png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">when fire</div>
+    <h1 id="today-date" class="date">…</h1>
+    <p id="status" class="status" hidden></p>
+    <form id="key-form" class="form" hidden>
+      <label class="field">
+        <span>This app needs its key.  Paste the full address you were given, or just the key.</span>
+        <input id="key-input" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://…/when-fire-mcp?token=…">
+      </label>
+      <button type="submit" class="primary">Open</button>
+    </form>
+  </header>
+
+  <main>
+    <section id="today" aria-labelledby="today-h">
+      <h2 id="today-h">Today</h2>
+      <ol id="ledger" class="ledger"></ol>
+      <p id="ledger-empty" class="empty" hidden>Nothing recorded yet today.</p>
+    </section>
+
+    <section id="live" aria-labelledby="live-h">
+      <h2 id="live-h">Live</h2>
+      <div id="bundles"></div>
+      <p id="live-empty" class="empty" hidden>Nothing is live.  Affirm something and it shows up here.</p>
+    </section>
+
+    <section id="record" aria-labelledby="record-h">
+      <h2 id="record-h">Record something</h2>
+      <form id="record-form" class="form">
+        <label class="field">
+          <span>What happened, in your words</span>
+          <textarea id="record-said" rows="2" placeholder="Eight at 120.  Called my sister.  Signed it." required></textarea>
+        </label>
+        <div class="row">
+          <label class="field grow">
+            <span>About</span>
+            <select id="record-about"><option value="">Nothing in particular</option></select>
+          </label>
+          <label class="field">
+            <span>When</span>
+            <input id="record-when" type="datetime-local">
+          </label>
+        </div>
+        <button type="submit" class="primary">Record</button>
+      </form>
+    </section>
+
+    <section id="night" aria-labelledby="night-h">
+      <h2 id="night-h">Last night</h2>
+      <div id="reconciliation"></div>
+      <p id="night-empty" class="empty" hidden>No reconciliation yet.  The first one lands at 11:30 tonight.</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <label class="field inline">
+      <span>Facts are signed</span>
+      <input id="name" type="text" autocapitalize="off" autocomplete="off" spellcheck="false">
+    </label>
+    <p id="install-hint" hidden>To get notifications later, add this page to your Home Screen from the share menu.</p>
+    <p class="fine">Read through the when fire connector.  Nothing here is ever edited; a correction is a new fact.</p>
+  </footer>
+
+  <template id="when-row">
+    <li class="when">
+      <div class="when-main">
+        <p class="when-words"></p>
+        <p class="when-cond"></p>
+      </div>
+      <button type="button" class="did">Did it</button>
+      <form class="did-form" hidden>
+        <label class="field">
+          <span>Say it</span>
+          <input type="text" name="said" value="Did it.">
+        </label>
+        <label class="field">
+          <span>When</span>
+          <input type="datetime-local" name="when">
+        </label>
+        <div class="row">
+          <button type="submit" class="primary">Record</button>
+          <button type="button" class="quiet cancel">Cancel</button>
+        </div>
+      </form>
+    </li>
+  </template>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
