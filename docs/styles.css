@@ -98,6 +98,7 @@ h2 {
 .mark.silence { border: 2px solid var(--ember); background: transparent; }
 .mark.moment, .mark.at { background: var(--ember); }
 .mark.listener { background: var(--ink-3); opacity: .6; }
+.mark.thought { background: transparent; border: 2px solid var(--ink-3); border-radius: 2px; }
 .entry p { margin: 0; }
 .entry .who { color: var(--ink-3); font-size: 15px; }
 .entry .why { color: var(--ink-2); font-size: 15px; margin-top: 2px; }

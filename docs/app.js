@@ -2,7 +2,8 @@
 // Talks to the core through the when fire connector, the same five verbs any AI uses.
 // The key rides on the page's address (?token=...), exactly as it does on the connector's.
 
-const SYSTEM_SOURCES = /^(judge|reconciler|listener:)/;
+const SYSTEM_SOURCES = /^(judge|reconciler|thinker|listener:)/;
+const PLUMBING_FIRES = new Set(["fact", "quiet", "listener"]); // the fires that only wake machinery; not shown
 // The system's and the AI's own notes are never the person's doing.
 const isSystem = (k) => SYSTEM_SOURCES.test(k.source) || k.source === "ai";
 // A reconciliation, whoever wrote it, belongs to "last night", not to today's ledger.
@@ -87,7 +88,9 @@ function renderLedger() {
   const lines = [];
   for (const x of record.fires) {
     if (new Date(x.fired_at).getTime() < today) continue;
-    lines.push({ t: x.fired_at, kind: x.context?.kind ?? "fire", text: wordsFor(x.when_id), why: x.context?.reason ?? "" , who: `fired by ${x.fired_by}` });
+    if (PLUMBING_FIRES.has(x.context?.kind)) continue;
+    const late = x.context?.late ? ", late" : "";
+    lines.push({ t: x.fired_at, kind: x.context?.kind ?? "fire", text: wordsFor(x.when_id), why: x.context?.reason ?? "" , who: `fired by ${x.fired_by}${late}` });
   }
   for (const k of record.facts) {
     if (isReconciliation(k) || corrected.has(k.id)) continue; // last night's, or superseded by a correction
@@ -101,7 +104,7 @@ function renderLedger() {
     if (k.about) notes.push(`about: ${wordsFor(k.about).split(".")[0]}`);
     lines.push({
       t: earlier ? k.recorded_at : k.happened_at,
-      kind: isSystem(k) ? "listener" : "fact",
+      kind: k.source === "thinker" ? "thought" : (isSystem(k) ? "listener" : "fact"),
       text: k.said,
       who: notes.join(", "),
       why: "",
