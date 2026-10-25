@@ -43,6 +43,8 @@ Sunday, October 25, 2026.  The words, as they stand after the rewrite.  One word
 - **Watch**: reads worded whens against the record and gives readings.
 - **Reconciler**: closes episodes and days, links facts to concepts, bridges them to whens, writes snapshots, asks the Thinker to settle; replays the record on request.
 - **Thinker**: thinks in a way given as data.  Two speeds: the glance (one call when a fact lands) and the settle (a way of seats after an episode closes).
+- **way**: the seats a settle sits, in order, each with its prompt; data, not code.  Two ship: yes-and (noticer, builder, gatherer, honesty) and the court (facilitator, proposer, challenger, honesty).
+- **navigator**: the last seat of every settle.  It takes everything the seats said and chooses the way forward: a conclusion, a question, a proposition, a commitment, or nothing.
 - **Doer**: acts from the outbox; writes the morning page and the nightly copy.
 - **Librarian**: keeps the shelf: learn, ask, media, embed.
 - **connector**: the one door for people and models; speaks the Model Context Protocol; locked by the token on its address.

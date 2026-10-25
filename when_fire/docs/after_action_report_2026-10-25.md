@@ -20,13 +20,13 @@ Eight to half past: the dev connector and the client.  Saturday's jump rope sess
 
 8:24 AM: cutover.  The old heartbeat and the scratch heartbeat were stopped; the old schema became when_fire_v1; the four migrations were applied to a fresh when_fire; every table was copied from the scratch schema in dependency order; the old public query doors were dropped; the new connector was deployed at the old name; the old listener and web door were replaced with stubs that answer gone; the client was pushed to GitHub Pages.
 
-8:42 AM: the first live cycle, unprompted.  The Heartbeat raised quiet thirty minutes after the rope fact landed; the Reconciler closed the orphan episode of Saturday morning, the Watch read Saturday again (met for the rope when; silence for the calf raises after it), the day of October 24 was written again with the session in it, and the Thinker settled through the yes-and way (noticer, builder, gatherer, honesty, closer) and chose nothing, since the one question worth asking already stood.
+8:42 AM: the first live cycle, unprompted.  The Heartbeat raised quiet thirty minutes after the rope fact landed; the Reconciler closed the orphan episode of Saturday morning, the Watch read Saturday again (met for the rope when; silence for the calf raises after it), the day of October 24 was written again with the session in it, and the Thinker settled through the yes-and way (noticer, builder, gatherer, honesty, navigator) and chose nothing, since the one question worth asking already stood.
 
 ## 3. What exists now
 
 The database.  Schema when_fire: 29 whens (13 on your side, the rest the system's own), 20 world facts and 11 notes, 21 fires, 62 sources, 1,919 claims all embedded, 70 concepts (28 body parts, 24 movements, 8 measures, 3 reasons, 2 people, 1 place, 4 other), 196 links, 16 bridges, 15 episodes, 31 snapshots, 2 open questions, 1 open task (this morning's page, for you to read and mark done).  Beside it, when_fire_v1 untouched and wf_next as scratch.  Cron job when_fire.heartbeat every minute.
 
-The functions.  watch (version 2), reconciler (9), thinker (3), doer (1), librarian (7), when-fire-mcp (5), copy (5), next-when-fire-mcp (1); listener (10) and when-fire-web (2) are stubs.
+The functions.  watch (version 2), reconciler (9), thinker (4), doer (1), librarian (7), when-fire-mcp (5), copy (5), next-when-fire-mcp (1); listener (10) and when-fire-web (2) are stubs.
 
 The client.  https://stacydraper.github.io/SuperHuman/ with five pages on one bar along the bottom: Record, Whens, Thoughts, Questions, Settings.  It carries your key once from the address and keeps it.  After your first look at it (9:15 AM) the Record page lost its about box, gained a plus that opens Camera, Photos and Files (any file rides along as a source the fact cites), and both Recent and Thoughts page with an Earlier button; the connector and the Librarian learned to take any attachment, not only pictures.  The first load after a push may need one refresh if the old page was cached.
 

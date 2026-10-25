@@ -4,7 +4,7 @@
 //   whens it counts toward, mark surprise, answer an open question if it does, open a question if one is worth
 //   standing, and write a note only when the fact surprises or asks.  Reads any picture the fact cites.
 // settle: the Reconciler posts after an episode closes.  A way runs: seats in order, each a model call that sees the
-//   transcript so far, then a closer that chooses the exit: a conclusion, a question (a standing thing, asked of the
+//   transcript so far, then the navigator, who chooses the way forward: a conclusion, a question (a standing thing, asked of the
 //   shelf, the record, Health, or the person), a proposition for a calm moment, a commitment (asserted on the Thinker's
 //   side), or nothing.  The yes-and way ships first, with an honesty seat; the court is the second way.
 // Questions: a standing question is tried before the person is asked.  Most should close without reaching him.
@@ -52,7 +52,7 @@ const GLANCE_SHAPE = {
   required: ["concepts", "whens", "read", "note", "answers", "open", "ask_of", "watch_closely_hours"],
 };
 
-const CLOSER_SHAPE = {
+const NAVIGATOR_SHAPE = {
   type: "object", additionalProperties: false,
   properties: {
     exit: { type: "string", enum: ["conclusion", "question", "proposition", "commitment", "nothing"] },
@@ -189,8 +189,8 @@ async function settle(owner: string, fireId: string | null): Promise<any> {
     if (seat.name === "noticer" && /nothing (is )?worth/i.test(text) && text.length < 400) break;
   }
 
-  const closerUser = `${ground}\n\n--- transcript ---\n${transcript.map((t) => `[${t.seat}] ${t.said}`).join("\n\n")}\n\n--- close ---\nChoose the exit.  Nothing is a fine exit.  A question goes to the shelf, the record or Health before the person.  A proposition is for a calm moment, in his register, never a push.  A commitment is the Thinker's own when (what the Thinker will watch for), not the person's.`;
-  const { data, usage } = await model(owner, "thinker", { stable: STABLE, system: "Return the exit as data.", user: closerUser, maxTokens: 4000, shape: CLOSER_SHAPE, fire: fireId, note: "settle: closer" });
+  const navigatorUser = `${ground}\n\n--- transcript ---\n${transcript.map((t) => `[${t.seat}] ${t.said}`).join("\n\n")}\n\n--- the way forward ---\nFrom everything in front of you, choose the way forward: the exit.  Nothing is a fine exit.  A question goes to the shelf, the record or Health before the person.  A proposition is for a calm moment, in his register, never a push.  A commitment is the Thinker's own when (what the Thinker will watch for), not the person's.`;
+  const { data, usage } = await model(owner, "thinker", { stable: STABLE, system: "You sit as the navigator: you take the readings the seats gave and choose the course.  Return the exit as data.", user: navigatorUser, maxTokens: 4000, shape: NAVIGATOR_SHAPE, fire: fireId, note: "settle: navigator" });
 
   for (const a of data.answered ?? []) { const q = pick(a.question, open); if (q) await questionEvent(q.id, "answered", "thinker", a.words, (a.cites ?? []).join(",")); }
   for (const m of data.moved ?? []) { const q = pick(m.question, open); if (q) await questionEvent(q.id, "tried", "thinker", m.why, null, { ask_of: m.ask_of }); }
