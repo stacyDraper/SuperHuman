@@ -1,6 +1,6 @@
 // when fire, the web client's service worker.  Sunday, October 25, 2026.
 // Keeps the shell available offline: the pages, the script, the styles, the icon.  The connector is never cached.
-const SHELL = "when-fire-shell-v3";
+const SHELL = "when-fire-shell-v4";
 const ASSETS = ["./", "./index.html", "./whens.html", "./thoughts.html", "./questions.html", "./settings.html", "./app.js", "./styles.css", "./icon-512.png", "./manifest.webmanifest"];
 const SCOPE = self.registration.scope;
 

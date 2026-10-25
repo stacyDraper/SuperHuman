@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>when fire · settings</title>
+  <meta name="description" content="What I said I would do, and what happened.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f4efe6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15191c" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="when fire">
+  <link rel="apple-touch-icon" href="./icon-512.png">
+  <link rel="icon" href="./icon-512.png" type="image/png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css?v=20261025b">
+</head>
+<body data-page="settings">
+  <header class="top">
+    <a class="brand" href="./">when fire</a>
+    <h1 class="title">Settings</h1>
+    <p id="status" class="status" hidden></p>
+    <form id="key-form" class="form key" hidden>
+      <label class="field">
+        <span>This app needs its key.  Paste the full address you were given, or just the key.</span>
+        <input id="key-input" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://…/when-fire-mcp?token=…">
+      </label>
+      <button type="submit" class="primary">Open</button>
+    </form>
+  </header>
+  <main id="main">
+
+    <section>
+      <h2>Health</h2>
+      <dl id="health" class="health"></dl>
+    </section>
+    <section>
+      <h2>Watch closely</h2>
+      <form id="turbo-form" class="form inline">
+        <label class="field"><span>for how many hours</span><input id="turbo-hours" type="number" min="0" max="48" step="1" value="4"></label>
+        <button type="submit" class="primary">Turbo</button>
+      </form>
+      <p class="hint">The Watch's poll runs every thirty minutes until then, then falls back to every three hours.  Zero turns it off.</p>
+    </section>
+    <section>
+      <h2>The door</h2>
+      <form id="door-form" class="form">
+        <label class="field"><span>function</span><input id="door" type="text" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span>schema (blank for the live record)</span><input id="schema" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder=""></label>
+        <button type="submit" class="ghost">Save</button>
+      </form>
+      <p class="hint">Address: <code id="address"></code><br>Key: <code id="key-masked"></code> · <button id="forget-key" type="button" class="link">forget the key on this phone</button></p>
+    </section>
+    <section id="install-hint" hidden>
+      <h2>On the home screen</h2>
+      <p class="hint">In Safari, tap Share, then “Add to Home Screen”.  The key stays with the app.</p>
+    </section>
+    <p class="hint small">when fire · the client is one of several doors; everything it writes goes through the connector, the same verbs any AI uses.</p>
+
+  </main>
+  <nav class="tabs" aria-label="Pages">
+    <a href="./" data-page="record"><span class="glyph">✎</span>Record</a>
+    <a href="./whens.html" data-page="whens"><span class="glyph">◎</span>Whens</a>
+    <a href="./thoughts.html" data-page="thoughts"><span class="glyph">☁</span>Thoughts</a>
+    <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
+    <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
+  </nav>
+  <script src="./app.js?v=20261025b"></script>
+</body>
+</html>

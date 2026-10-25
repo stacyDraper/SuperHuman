@@ -49,7 +49,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom) + 16px);
   min-height: 100vh;
 }
 a { color: inherit; }
@@ -103,8 +103,6 @@ button.link { border: 0; background: none; padding: 0; min-height: 0; color: var
 button:disabled { opacity: 0.6; cursor: default; }
 label.file { display: inline-flex; align-items: center; justify-content: center; }
 label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.thumb-row { display: none; align-items: center; gap: 12px; }
-.thumb-row:has(.thumb:not([hidden])) { display: flex; }
 .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
 .toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 0.9rem; color: var(--ink-2); margin: 4px 0 12px; }
 .toggle input { width: 18px; height: 18px; accent-color: var(--ember); }
@@ -171,7 +169,8 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .health dt { color: var(--ink-3); font-size: 0.9rem; }
 .health dd { margin: 0; overflow-wrap: anywhere; }
 
-/* the tabs */
+
+/* the tabs: the bar along the bottom, one glyph and a word per page */
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; height: calc(var(--tabs-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
@@ -182,7 +181,22 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .tabs a .glyph { font-size: 1.25rem; line-height: 1; }
 .tabs a[aria-current="page"] { color: var(--ember); }
 
+/* the plus and its sheet */
+.attach-row { position: relative; align-items: center; }
+.plus { width: 48px; min-width: 48px; font-size: 1.5rem; line-height: 1; padding: 0; }
+.sheet { position: absolute; left: 0; top: 54px; z-index: 5; min-width: 200px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18); overflow: hidden; }
+.sheet-row { display: flex; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 1rem; }
+.sheet-row:last-child { border-bottom: 0; }
+.sheet-row:active { background: var(--bg-3); }
+.sheet-row input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.attached { display: flex; align-items: center; gap: 10px; }
+.attached-name { color: var(--ink-2); font-size: 0.9rem; }
+
+/* paging */
+.more { display: block; margin: 14px auto 0; }
+
 @media (min-width: 720px) {
+  .top, main { max-width: 720px; margin-left: auto; margin-right: auto; }
   .tabs { position: sticky; top: 0; bottom: auto; border-top: 0; border-bottom: 1px solid var(--line); max-width: 720px; margin: 0 auto; height: 52px; grid-template-columns: repeat(5, auto); justify-content: center; gap: 24px; }
   .tabs a { flex-direction: row; gap: 6px; font-size: 0.9rem; }
   body { padding-bottom: 24px; display: flex; flex-direction: column; }

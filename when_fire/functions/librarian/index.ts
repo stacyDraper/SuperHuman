@@ -4,8 +4,8 @@
 //          origin and title handed in again reuses the source and adds only claims that are missing), reads it with the
 //          model in chunks, writes one claim per sentence it says, embeds each.  Its model calls get the cut-off rule.
 //   ask:   { owner, question, limit }  the current claims that bear on the question, by words and by meaning.
-//   media: { owner, base64, media_type, origin, title, happened_at, kind }  stores a picture or a recording in the
-//          private sources bucket and records it as a source; a fact may then cite it.
+//   media: { owner, base64, media_type, origin, title, happened_at, kind }  stores a picture, a recording or a file
+//          in the private sources bucket and records it as a source; a fact may then cite it.
 //   embed: { owner, limit }  fills embeddings for claims that have none, a few per request, and posts to itself for the
 //          rest: the embedder is heavy on the worker's compute budget, so the work is spread over requests.
 // The connector forwards the person's learn and ask here with the shared secret.  The bus does not post here.
@@ -83,7 +83,10 @@ function later(owner: string): void {
 
 async function media(owner: string, m: any): Promise<any> {
   if (!m?.base64 || !m?.media_type) throw new Error("media needs base64 and media_type");
-  const ext = ({ "image/jpeg": "jpg", "image/png": "png", "image/heic": "heic", "image/webp": "webp", "audio/m4a": "m4a", "audio/mp4": "m4a", "audio/mpeg": "mp3", "audio/wav": "wav" } as Record<string, string>)[m.media_type] ?? "bin";
+  const known = ({ "image/jpeg": "jpg", "image/png": "png", "image/heic": "heic", "image/webp": "webp", "audio/m4a": "m4a", "audio/mp4": "m4a", "audio/mpeg": "mp3", "audio/wav": "wav", "application/pdf": "pdf", "text/plain": "txt", "text/csv": "csv", "text/markdown": "md" } as Record<string, string>)[m.media_type];
+  const fromTitle = String(m.title ?? "").match(/\.([a-z0-9]{1,5})$/i)?.[1]?.toLowerCase();
+  const ext = known ?? fromTitle ?? "bin";
+  const kind = m.kind ?? (m.media_type.startsWith("image/") ? "picture" : m.media_type.startsWith("audio/") ? "recording" : "file");
   const id = crypto.randomUUID();
   const path = `${owner}/${id}.${ext}`;
   const bytes = Uint8Array.from(atob(m.base64), (c) => c.charCodeAt(0));
@@ -93,7 +96,7 @@ async function media(owner: string, m: any): Promise<any> {
   if (!up.ok) throw new Error(`storage ${up.status}: ${(await up.text()).slice(0, 300)}`);
   const s = (await run(
     `insert into §.sources (id, owner, happened_at, origin, kind, title, text, media_path, media_type, shape) values ($1, $2, $3, $4, $5, $6, null, $7, $8, $9::text::jsonb) returning id`,
-    [id, owner, m.happened_at ?? null, m.origin ?? "the person's camera", m.kind ?? (m.media_type.startsWith("image/") ? "picture" : "recording"), m.title ?? null, path, m.media_type, JSON.stringify(m.shape ?? null)]))[0];
+    [id, owner, m.happened_at ?? null, m.origin ?? (kind === "file" ? "the person's files" : "the person's camera"), kind, m.title ?? null, path, m.media_type, JSON.stringify(m.shape ?? null)]))[0];
   return { source: s.id, path, bytes: bytes.length };
 }
 

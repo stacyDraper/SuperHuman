@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>when fire · questions</title>
+  <meta name="description" content="What I said I would do, and what happened.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f4efe6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15191c" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="when fire">
+  <link rel="apple-touch-icon" href="./icon-512.png">
+  <link rel="icon" href="./icon-512.png" type="image/png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css?v=20261025b">
+</head>
+<body data-page="questions">
+  <header class="top">
+    <a class="brand" href="./">when fire</a>
+    <h1 class="title">Questions</h1>
+    <p id="status" class="status" hidden></p>
+    <form id="key-form" class="form key" hidden>
+      <label class="field">
+        <span>This app needs its key.  Paste the full address you were given, or just the key.</span>
+        <input id="key-input" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://…/when-fire-mcp?token=…">
+      </label>
+      <button type="submit" class="primary">Open</button>
+    </form>
+  </header>
+  <main id="main">
+
+    <section>
+      <h2>Asked of you</h2>
+      <p class="lead">The Thinker asks the shelf, the record and the world first.  What reaches you is what only you can answer.</p>
+      <div id="asked"></div>
+      <p id="asked-empty" class="empty" hidden>Nothing waits on you.</p>
+    </section>
+    <section>
+      <h2>Still looking</h2>
+      <div id="looking"></div>
+      <p id="looking-empty" class="empty" hidden>No open questions.</p>
+    </section>
+    <section>
+      <h2>Outbox</h2>
+      <p class="lead">What the Doer wrote for the morning and for the session.  Mark a page done when you have read it.</p>
+      <div id="tasks"></div>
+      <p id="tasks-empty" class="empty" hidden>The outbox is empty.</p>
+    </section>
+
+  </main>
+  <nav class="tabs" aria-label="Pages">
+    <a href="./" data-page="record"><span class="glyph">✎</span>Record</a>
+    <a href="./whens.html" data-page="whens"><span class="glyph">◎</span>Whens</a>
+    <a href="./thoughts.html" data-page="thoughts"><span class="glyph">☁</span>Thoughts</a>
+    <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
+    <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
+  </nav>
+  <script src="./app.js?v=20261025b"></script>
+</body>
+</html>

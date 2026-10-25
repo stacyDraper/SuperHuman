@@ -21,7 +21,7 @@ HEAD = """<!doctype html>
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=20261025b">
 </head>
 <body data-page="{page}">
   <header class="top">
@@ -46,7 +46,7 @@ HEAD = """<!doctype html>
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js"></script>
+  <script src="./app.js?v=20261025b"></script>
 </body>
 </html>
 """
@@ -66,19 +66,18 @@ PAGES = {
           </label>
           <button id="now" type="button" class="ghost">Now</button>
         </div>
-        <div class="row">
-          <label class="field grow">
-            <span class="visually-hidden">About a when</span>
-            <select id="about"><option value="">about a when (optional)</option></select>
-          </label>
-          <label class="ghost button file">
-            <span>Picture</span>
-            <input id="picture" type="file" accept="image/*" capture="environment">
-          </label>
-        </div>
-        <div class="thumb-row">
-          <img id="thumb" class="thumb" alt="the picture to record" hidden>
-          <button id="clear-picture" type="button" class="link">remove picture</button>
+        <div class="row attach-row">
+          <button id="plus" type="button" class="ghost plus" aria-haspopup="true" aria-expanded="false" aria-controls="attach-sheet">+</button>
+          <div id="attach-sheet" class="sheet" hidden>
+            <label class="sheet-row"><span>Camera</span><input id="pick-camera" type="file" accept="image/*" capture="environment"></label>
+            <label class="sheet-row"><span>Photos</span><input id="pick-photos" type="file" accept="image/*"></label>
+            <label class="sheet-row"><span>Files</span><input id="pick-files" type="file"></label>
+          </div>
+          <div id="attached" class="attached" hidden>
+            <img id="thumb" class="thumb" alt="the picture to record" hidden>
+            <span id="attached-name" class="attached-name"></span>
+            <button id="clear-attachment" type="button" class="link">remove</button>
+          </div>
         </div>
         <button id="record-btn" type="submit" class="primary big">Record</button>
       </form>
@@ -91,7 +90,8 @@ PAGES = {
     <section class="log-section" aria-labelledby="recent-h">
       <h2 id="recent-h">Recent</h2>
       <div id="log"></div>
-      <p id="log-empty" class="empty" hidden>Nothing recorded in the last two days.</p>
+      <p id="log-empty" class="empty" hidden>Nothing recorded yet.</p>
+      <button id="log-more" type="button" class="ghost more" hidden>Earlier</button>
     </section>
 """),
     "whens.html": dict(page="whens", title="when fire · whens", heading="Whens", main="""
@@ -105,6 +105,7 @@ PAGES = {
     <label class="toggle"><input id="show-notes" type="checkbox"> also the Thinker's notes</label>
     <div id="thoughts"></div>
     <p id="thoughts-empty" class="empty" hidden>Nothing written yet.</p>
+    <button id="thoughts-more" type="button" class="ghost more" hidden>Earlier</button>
 """),
     "questions.html": dict(page="questions", title="when fire · questions", heading="Questions", main="""
     <section>

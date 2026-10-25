@@ -56,7 +56,7 @@ const TOOLS = [
   },
   {
     name: "record",
-    description: "Write a fact: what happened, in the person's words.  Two times: happened_at (when it happened; may be long ago) and recorded_at (now).  Late facts are welcome.  A correction is a new fact pointing at the old one.  A picture (base64) is stored as a source and cited by the fact; the glance reads it.",
+    description: "Write a fact: what happened, in the person's words.  Two times: happened_at (when it happened; may be long ago) and recorded_at (now).  Late facts are welcome.  A correction is a new fact pointing at the old one.  An attachment (a picture, a recording or a file, base64) is stored as a source and cited by the fact; the glance reads pictures.",
     inputSchema: { type: "object", properties: {
       said: { type: "string", description: "The words.  'Did a round.'  'Eight at 120.'  '12 decline push-ups.'" },
       said_by: { type: "string", description: "Who says it: the person's name (default), 'health', a device, an actor." },
@@ -64,7 +64,8 @@ const TOOLS = [
       happened_at: { type: "string", description: "ISO time it happened.  Default now." },
       corrects: { type: "string", description: "Id of the earlier fact this corrects." },
       shape: { type: ["object", "null"] },
-      picture: { type: "object", properties: { base64: { type: "string" }, media_type: { type: "string" }, title: { type: "string" } }, description: "A picture to store with the fact." },
+      attachment: { type: "object", properties: { base64: { type: "string" }, media_type: { type: "string" }, title: { type: "string" } }, description: "A picture, a recording or a file to store as a source the fact cites.  The glance reads pictures." },
+      picture: { type: "object", properties: { base64: { type: "string" }, media_type: { type: "string" }, title: { type: "string" } }, description: "The same as attachment; kept for older callers." },
     }, required: ["said"] },
   },
   {
@@ -141,8 +142,9 @@ async function callTool(owner: string, name: string, args: Record<string, any>) 
     case "record": {
       if (!args.said) throw new Error("record needs said");
       let cites: string | null = null;
-      if (args.picture?.base64) {
-        const m = await librarian(owner, { verb: "media", media: { base64: args.picture.base64, media_type: args.picture.media_type ?? "image/jpeg", title: args.picture.title ?? null, happened_at: args.happened_at ?? null } });
+      const att = args.attachment ?? args.picture;
+      if (att?.base64) {
+        const m = await librarian(owner, { verb: "media", media: { base64: att.base64, media_type: att.media_type ?? "image/jpeg", title: att.title ?? null, happened_at: args.happened_at ?? null } });
         cites = m.source;
       }
       const id = await record(owner, args.said, args.said_by ?? p.toLowerCase(), { happened_at: args.happened_at ?? null, about: args.about ?? null, corrects: args.corrects ?? null, cites, shape: args.shape ?? { via: "connector" } });

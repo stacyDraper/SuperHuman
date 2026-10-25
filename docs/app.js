@@ -1,5 +1,5 @@
 // when fire, the web client.  Sunday, October 25, 2026.
-// Several pages, one navigation, one door: every page talks to the connector with the same verbs any AI uses.
+// Several pages, one navigation (a bar at the top of every page), one door: every page talks to the connector with the same verbs any AI uses.
 // The key rides on the page's address once (?token=...), then lives in this browser's storage.
 // Pages: record (index), whens, thoughts, questions, settings.  The body's data-page says which one this is.
 
@@ -146,49 +146,66 @@ function nav() {
 // ---------------------------------------------------------------------------------------------
 const pages = {};
 
-// Record: what happened, in the person's words, with the time it happened first.  The recent log below.
+// Record: what happened, in the person's words, with the time it happened first.  The recent log below, paged.
 pages.record = async function () {
-  const form = $("record-form"), said = $("said"), when = $("happened"), about = $("about"), pic = $("picture"), thumb = $("thumb");
-  let timeTouched = false, picture = null;
+  const form = $("record-form"), said = $("said"), when = $("happened"), sheet = $("attach-sheet"), plus = $("plus");
+  let timeTouched = false, attachment = null;
+  let windowDays = 2, shown = 20;
+  const worldFacts = (rec) => rec.facts.filter((f) => !isNote(f) && f.kind === "world").sort((a, b) => (a.happened_at < b.happened_at ? 1 : -1));
   const setNow = () => { when.value = inputValue(); timeTouched = false; when.classList.remove("touched"); };
   setNow();
   when.addEventListener("input", () => { timeTouched = true; when.classList.add("touched"); });
   $("now").addEventListener("click", setNow);
   said.addEventListener("input", () => { said.style.height = "auto"; said.style.height = `${Math.min(said.scrollHeight, 320)}px`; });
-  pic.addEventListener("change", async () => {
-    const f = pic.files?.[0]; if (!f) { picture = null; thumb.hidden = true; return; }
-    picture = await shrink(f);
-    thumb.src = `data:${picture.media_type};base64,${picture.base64}`; thumb.hidden = false;
-    if (!timeTouched && f.lastModified && Date.now() - f.lastModified > 5 * 60000) { when.value = inputValue(new Date(f.lastModified)); timeTouched = true; when.classList.add("touched"); }
-  });
-  $("clear-picture").addEventListener("click", () => { pic.value = ""; picture = null; thumb.hidden = true; });
+
+  // the plus: camera, photos, files
+  const openSheet = (open) => { sheet.hidden = !open; plus.setAttribute("aria-expanded", String(open)); plus.textContent = open ? "×" : "+"; };
+  plus.addEventListener("click", () => openSheet(sheet.hidden));
+  document.addEventListener("click", (e) => { if (!sheet.hidden && !sheet.contains(e.target) && e.target !== plus) openSheet(false); });
+  for (const id of ["pick-camera", "pick-photos", "pick-files"]) {
+    $(id).addEventListener("change", async (e) => {
+      const f = e.target.files?.[0]; openSheet(false);
+      if (!f) return;
+      attachment = await pack(f);
+      showAttachment(f);
+      if (!timeTouched && f.lastModified && Date.now() - f.lastModified > 5 * 60000) { when.value = inputValue(new Date(f.lastModified)); timeTouched = true; when.classList.add("touched"); }
+      e.target.value = "";
+    });
+  }
+  $("clear-attachment").addEventListener("click", () => { attachment = null; $("attached").hidden = true; $("thumb").hidden = true; });
+  function showAttachment(f) {
+    const img = $("thumb");
+    if (attachment.media_type.startsWith("image/")) { img.src = `data:${attachment.media_type};base64,${attachment.base64}`; img.hidden = false; } else img.hidden = true;
+    $("attached-name").textContent = attachment.media_type.startsWith("image/") ? "" : `${f.name} (${Math.round(f.size / 1024)} kB)`;
+    $("attached").hidden = false;
+  }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const words = said.value.trim();
-    if (!words && !picture) { said.focus(); return; }
-    const args = { said: words || "(picture)", shape: { via: "when_fire_web" } };
+    if (!words && !attachment) { said.focus(); return; }
+    const args = { said: words || (attachment?.media_type.startsWith("image/") ? "(picture)" : `(${attachment?.title ?? "file"})`), shape: { via: "when_fire_web" } };
     if (timeTouched && when.value) args.happened_at = new Date(when.value).toISOString();
-    if (about.value) args.about = about.value;
-    if (picture) args.picture = picture;
+    if (attachment) args.attachment = attachment;
     const btn = $("record-btn"); btn.disabled = true; btn.textContent = "Recording…";
     try {
       await call("record", args);
       status(args.happened_at ? `Recorded, as of ${fmtStamp(args.happened_at)}.` : "Recorded.", "ok");
-      said.value = ""; said.style.height = ""; about.value = ""; pic.value = ""; picture = null; thumb.hidden = true; setNow();
+      said.value = ""; said.style.height = ""; attachment = null; $("attached").hidden = true; setNow();
       await renderLog(true);
     } catch (err) {
       if (needKey(err)) { status("The key was refused.  Paste the address again.", "warn", 0); }
       else {
         pending.add({ args });
         status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000);
-        said.value = ""; said.style.height = ""; picture = null; thumb.hidden = true; setNow();
+        said.value = ""; said.style.height = ""; attachment = null; $("attached").hidden = true; setNow();
         renderPending();
       }
     } finally { btn.disabled = false; btn.textContent = "Record"; }
   });
 
   $("retry").addEventListener("click", async () => { const n = await pending.flush(); status(n ? `${n} sent.` : "Still waiting.", n ? "ok" : "warn"); renderPending(); if (n) renderLog(true); });
+  $("log-more").addEventListener("click", async () => { shown += 20; await renderLog(false, true); });
   renderPending();
   const flushed = await pending.flush().catch(() => 0);
   if (flushed) { status(`${flushed} kept entr${flushed === 1 ? "y" : "ies"} sent.`, "ok"); renderPending(); }
@@ -199,17 +216,19 @@ pages.record = async function () {
     box.hidden = l.length === 0;
     $("pending-list").replaceChildren(...l.map((it) => el("li", {}, el("span", { class: "words" }, it.args.said), el("span", { class: "meta" }, `written ${relative(it.queued_at)}`))));
   }
-  async function renderLog(fresh = false) {
-    const log = $("log"), empty = $("log-empty");
+  // The log shows the newest facts first, twenty at a time; Earlier shows twenty more, widening the window as needed.
+  async function renderLog(fresh = false, more = false) {
+    const log = $("log"), empty = $("log-empty"), moreBtn = $("log-more");
     try {
-      const rec = await readRecord({ since: hoursAgo(60), limit: "all", notes: false }, fresh);
-      fillAbout(rec.whens);
+      let rec = await readRecord({ since: hoursAgo(24 * windowDays), limit: "all", notes: false, fires: false }, fresh);
+      let facts = worldFacts(rec);
+      // widen the window until there are enough facts to show, or the window is a season
+      while (facts.length < shown + 1 && windowDays < 120) { windowDays = Math.min(windowDays * 3, 120); rec = await readRecord({ since: hoursAgo(24 * windowDays), limit: "all", notes: false, fires: false }); facts = worldFacts(rec); }
       const me = String(rec.person?.name ?? "").toLowerCase();
-      const facts = rec.facts.filter((f) => !isNote(f) && f.kind === "world").sort((a, b) => (a.happened_at < b.happened_at ? 1 : -1));
       const corrected = new Set(facts.map((f) => f.corrects).filter(Boolean));
-      const whenById = new Map(rec.whens.map((w) => [w.id, w]));
+      const page = facts.slice(0, shown);
       const groups = new Map();
-      for (const f of facts) { const k = dayKey(f.happened_at); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+      for (const f of page) { const k = dayKey(f.happened_at); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
       log.replaceChildren(...[...groups.entries()].map(([k, fs]) => el("section", { class: "day" },
         el("h3", {}, k === todayKey() ? "Today" : fmtDayLong(fs[0].happened_at)),
         el("ol", { class: "facts" }, fs.map((f) => el("li", { class: `fact${corrected.has(f.id) ? " corrected" : ""}${f.said_by !== me ? " other" : ""}` },
@@ -219,8 +238,7 @@ pages.record = async function () {
           ),
           el("div", { class: "meta" },
             f.said_by !== me ? el("span", { class: "badge" }, f.said_by) : null,
-            f.about && whenById.get(f.about) ? el("span", { class: "about" }, `about: ${firstWords(whenById.get(f.about).words, 6)}`) : null,
-            f.cites ? el("span", { class: "badge" }, "picture") : null,
+            f.cites ? el("span", { class: "badge" }, "attachment") : null,
             f.corrects ? el("span", { class: "badge" }, "corrects an earlier entry") : null,
             corrected.has(f.id) ? el("span", { class: "badge" }, "corrected later") : null,
             minutesApart(f.recorded_at, f.happened_at) > 15 ? el("span", { class: "footnote" }, `entered ${fmtStamp(f.recorded_at)}`) : null,
@@ -228,18 +246,20 @@ pages.record = async function () {
         ))),
       )));
       empty.hidden = facts.length > 0;
+      moreBtn.hidden = facts.length <= shown;
+      if (more) moreBtn.scrollIntoView({ block: "nearest" });
     } catch (err) {
       if (!needKey(err)) status(`The record did not answer: ${err.message}`, "warn", 6000);
     }
   }
-  function fillAbout(whens) {
-    const current = about.value;
-    const mine = whens.filter(isPersonSide).filter((w) => w.kind === "worded" || w.kind === "tick").sort((a, b) => (a.words < b.words ? -1 : 1));
-    about.replaceChildren(el("option", { value: "" }, "about a when (optional)"), ...mine.map((w) => el("option", { value: w.id }, short(w.words, 70))));
-    about.value = current;
-  }
 };
 
+// An attachment travels as base64: a picture is shrunk on the phone first (long side 1600, JPEG); anything else as it is, up to 8 MB.
+async function pack(file) {
+  if (file.type.startsWith("image/")) return await shrink(file);
+  if (file.size > 8 * 1024 * 1024) throw new Error("that file is over 8 MB");
+  return { base64: await toBase64(file), media_type: file.type || "application/octet-stream", title: file.name };
+}
 // A picture is shrunk on the phone before it travels: long side 1600, JPEG.
 async function shrink(file) {
   const bitmap = await createImageBitmap(file).catch(() => null);
@@ -301,19 +321,22 @@ pages.whens = async function () {
 
 // Thoughts: what stands now, written by the Reconciler, and the Thinker's own notes.
 pages.thoughts = async function () {
-  const list = $("thoughts"), toggle = $("show-notes");
+  const list = $("thoughts"), toggle = $("show-notes"), moreBtn = $("thoughts-more");
+  let windowDays = 7, shown = 12;
   toggle.checked = store.get("wf_show_notes") === "1";
   toggle.addEventListener("change", () => { store.set("wf_show_notes", toggle.checked ? "1" : "0"); render(true); });
+  moreBtn.addEventListener("click", async () => { shown += 12; if (shown > 24) windowDays = Math.min(windowDays * 3, 120); await render(false, true); });
   await render();
-  async function render(fresh = false) {
+  async function render(fresh = false, more = false) {
     try {
-      const rec = await readRecord({ since: hoursAgo(24 * 7), limit: "all", notes: toggle.checked, fires: false, include_inactive: true }, fresh);
+      const rec = await readRecord({ since: hoursAgo(24 * windowDays), limit: "all", notes: toggle.checked, fires: false, include_inactive: true }, fresh);
       const byId = new Map(rec.whens.map((w) => [w.id, w]));
       const items = [];
       for (const s of rec.snapshots ?? []) items.push({ at: s.written_at, kind: s.subject_kind, s });
       if (toggle.checked) for (const f of rec.facts.filter((f) => isNote(f) && !/^error:/.test(f.said_by) && ["thinker", "claude", "ai"].includes(f.said_by))) items.push({ at: f.recorded_at, kind: "note", f });
       items.sort((a, b) => (a.at < b.at ? 1 : -1));
-      list.replaceChildren(...items.map((it) => {
+      const page = items.slice(0, shown);
+      list.replaceChildren(...page.map((it) => {
         if (it.kind === "note") return el("article", { class: "thought note" }, el("h3", {}, `${it.f.said_by}, ${fmtStamp(it.f.recorded_at)}`), el("p", {}, it.f.said));
         const s = it.s;
         const [main, ...rest] = s.says.split("\n\n");
@@ -325,6 +348,8 @@ pages.thoughts = async function () {
           el("p", { class: "meta" }, `as of ${fmtStamp(s.watermark)} · written ${relative(s.written_at)} by ${s.written_by}`));
       }));
       $("thoughts-empty").hidden = items.length > 0;
+      moreBtn.hidden = items.length <= shown && windowDays >= 120;
+      if (more) moreBtn.scrollIntoView({ block: "nearest" });
     } catch (err) { if (!needKey(err)) status(`The record did not answer: ${err.message}`, "warn", 6000); }
   }
 };
