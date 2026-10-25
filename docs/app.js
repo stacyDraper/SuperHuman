@@ -1,33 +1,36 @@
-// when fire web client, phase 1: read the ledger, record facts.
-// Talks to the core through the when fire connector, the same five verbs any AI uses.
-// The key rides on the page's address (?token=...), exactly as it does on the connector's.
+// when fire, the web client.  Sunday, October 25, 2026.
+// Several pages, one navigation, one door: every page talks to the connector with the same verbs any AI uses.
+// The key rides on the page's address once (?token=...), then lives in this browser's storage.
+// Pages: record (index), whens, thoughts, questions, settings.  The body's data-page says which one this is.
 
-const SYSTEM_SOURCES = /^(judge|reconciler|thinker|listener:)/;
-const PLUMBING_FIRES = new Set(["fact", "quiet", "listener"]); // the fires that only wake machinery; not shown
-// The system's and the AI's own notes are never the person's doing.
-const isSystem = (k) => SYSTEM_SOURCES.test(k.source) || k.source === "ai";
-// A reconciliation, whoever wrote it, belongs to "last night", not to today's ledger.
-const isReconciliation = (k) => typeof k.shape?.kind === "string" && k.shape.kind.startsWith("reconciliation");
+"use strict";
 
-// --- the address and its key --------------------------------------------------
-const CONNECTOR = document.querySelector('meta[name="when-fire-connector"]').content;
+// ---------------------------------------------------------------------------------------------
+// The door.
+// ---------------------------------------------------------------------------------------------
+const BASE = "https://xmdrzegrkjdeibvxihih.supabase.co/functions/v1/";
+const store = {
+  get: (k, d = null) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } },
+  set: (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* storage may be shut */ } },
+};
 const params = new URLSearchParams(location.search);
-let token = params.get("token");
-if (token) {
-  localStorage.setItem("wf_token", token);
-  history.replaceState(null, "", location.pathname); // the key stays in storage, not in the address bar
-} else {
-  token = localStorage.getItem("wf_token");
-}
+if (params.get("token")) { store.set("wf_token", params.get("token")); }
+if (params.get("schema") !== null) { store.set("wf_schema", params.get("schema") || null); }
+if (params.get("door")) { store.set("wf_door", params.get("door")); }
+if ([...params.keys()].length) history.replaceState(null, "", location.pathname); // the key stays in storage, not in the bar
 
-// --- the one door --------------------------------------------------------------
+const token = () => store.get("wf_token", "");
+const doorName = () => store.get("wf_door", "when-fire-mcp");
+const schema = () => store.get("wf_schema", "");
+const address = () => `${BASE}${doorName()}?token=${encodeURIComponent(token())}${schema() ? `&schema=${encodeURIComponent(schema())}` : ""}`;
+
 async function call(name, args = {}) {
-  const r = await fetch(`${CONNECTOR}?token=${encodeURIComponent(token ?? "")}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
+  if (!token()) throw new Error("no key");
+  const r = await fetch(address(), {
+    method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name, arguments: args } }),
   });
-  if (r.status === 401) throw new Error("The key on this address was refused.  Open the app from its full address.");
+  if (r.status === 401) throw new Error("refused");
   const j = await r.json();
   if (j?.error) throw new Error(j.error.message);
   const text = j?.result?.content?.[0]?.text ?? "";
@@ -35,290 +38,368 @@ async function call(name, args = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-// --- time ----------------------------------------------------------------------
-const startOfDay = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
-const dayBefore = (d) => new Date(d.getTime() - 24 * 3600 * 1000);
+// ---------------------------------------------------------------------------------------------
+// Time, in the device's zone.  The time a thing happened leads; the time it was entered is a footnote.
+// ---------------------------------------------------------------------------------------------
+const pad = (n) => String(n).padStart(2, "0");
 const fmtTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-const localInputValue = (d = new Date()) => {
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-};
-const fromInput = (v) => (v ? new Date(v).toISOString() : undefined);
+const fmtDay = (iso) => new Date(iso).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+const fmtDayLong = (iso) => new Date(iso).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+const fmtStamp = (iso) => `${fmtDay(iso)}, ${fmtTime(iso)}`;
+const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const todayKey = () => dayKey(new Date().toISOString());
+const inputValue = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const hoursAgo = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+const minutesApart = (a, b) => Math.abs(new Date(a) - new Date(b)) / 60000;
+function relative(iso) {
+  const m = (Date.now() - new Date(iso)) / 60000;
+  if (m < 1) return "just now";
+  if (m < 60) return `${Math.round(m)} min ago`;
+  if (m < 36 * 60) return `${Math.round(m / 60)} h ago`;
+  return fmtDay(iso);
+}
 
-// --- state ---------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------
+// Small helpers.
+// ---------------------------------------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
-let record = { whens: [], facts: [], fires: [] };
-let whenById = new Map();
-let corrected = new Set(); // facts a later fact corrects; shown nowhere
-const name = () => (localStorage.getItem("wf_name") || "stacy").trim();
+const el = (tag, attrs = {}, ...children) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") n.className = v;
+    else if (k === "html") n.innerHTML = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) if (c !== null && c !== undefined && c !== false) n.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return n;
+};
+const ACTORS = new Set(["watch", "reconciler", "thinker", "doer", "librarian", "heartbeat", "system", "ai", "replay", "claude"]);
+const isPersonSide = (w) => !ACTORS.has(String(w.asserted_by));
+const isNote = (f) => f.kind === "note" || /^error:/.test(f.said_by);
+const short = (s, n = 90) => (s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s);
+const firstWords = (s, n = 7) => s.split(/\s+/).slice(0, n).join(" ") + (s.split(/\s+/).length > n ? "…" : "");
 
-function status(text, ms = 3200) {
-  const el = $("status");
-  el.textContent = text;
-  el.hidden = false;
+function status(text, kind = "", ms = 3600) {
+  const s = $("status"); if (!s) return;
+  s.textContent = text; s.className = `status ${kind}`; s.hidden = false;
   clearTimeout(status.t);
-  status.t = setTimeout(() => { el.hidden = true; }, ms);
+  if (ms) status.t = setTimeout(() => { s.hidden = true; }, ms);
 }
-
-// --- load ----------------------------------------------------------------------
-async function load() {
-  const since = dayBefore(startOfDay()).toISOString();
-  record = await call("read", { since, limit: "all" });
-  whenById = new Map(record.whens.map((w) => [w.id, w]));
-  corrected = new Set(record.facts.map((k) => k.corrects).filter(Boolean));
-  render();
+function needKey(err) {
+  const form = $("key-form"); if (!form) return false;
+  const refused = /refused|no key/.test(String(err?.message ?? err));
+  if (refused) { if (/refused/.test(String(err?.message))) store.set("wf_token", null); form.hidden = false; $("main")?.classList.add("locked"); }
+  return refused;
 }
-
-function wordsFor(whenId) {
-  const w = whenById.get(whenId);
-  return w ? w.words : "a when no longer live";
-}
-
-// --- render --------------------------------------------------------------------
-function render() {
-  $("today-date").textContent = new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
-  renderLedger();
-  renderLive();
-  renderRecordForm();
-  renderNight();
-}
-
-function renderLedger() {
-  const today = startOfDay().getTime();
-  const lines = [];
-  for (const x of record.fires) {
-    if (new Date(x.fired_at).getTime() < today) continue;
-    if (PLUMBING_FIRES.has(x.context?.kind)) continue;
-    const late = x.context?.late ? ", late" : "";
-    lines.push({ t: x.fired_at, kind: x.context?.kind ?? "fire", text: wordsFor(x.when_id), why: x.context?.reason ?? "" , who: `fired by ${x.fired_by}${late}` });
-  }
-  for (const k of record.facts) {
-    if (isReconciliation(k) || corrected.has(k.id)) continue; // last night's, or superseded by a correction
-    if (new Date(k.recorded_at).getTime() < today) continue;
-    const happened = new Date(k.happened_at);
-    const earlier = happened.getTime() < today;             // happened before today, recorded today
-    const late = !earlier && Math.abs(new Date(k.recorded_at) - happened) > 5 * 60 * 1000;
-    const notes = [k.source];
-    if (earlier) notes.push(`happened ${happened.toLocaleDateString([], { weekday: "short" })} ${fmtTime(k.happened_at)}`);
-    else if (late) notes.push(`recorded ${fmtTime(k.recorded_at)}`);
-    if (k.about) notes.push(`about: ${wordsFor(k.about).split(".")[0]}`);
-    lines.push({
-      t: earlier ? k.recorded_at : k.happened_at,
-      kind: k.source === "thinker" ? "thought" : (isSystem(k) ? "listener" : "fact"),
-      text: k.said,
-      who: notes.join(", "),
-      why: "",
-    });
-  }
-  lines.sort((a, b) => new Date(a.t) - new Date(b.t));
-  const ol = $("ledger");
-  ol.replaceChildren(...lines.map((l) => {
-    const li = document.createElement("li");
-    li.innerHTML = `<time></time><span class="mark"></span><div class="entry"><p></p><p class="who"></p><p class="why"></p></div>`;
-    li.querySelector("time").textContent = fmtTime(l.t);
-    li.querySelector(".mark").classList.add(l.kind);
-    li.querySelector(".entry p").textContent = l.text;
-    li.querySelector(".who").textContent = l.who;
-    const why = li.querySelector(".why");
-    if (l.why) why.textContent = l.why; else why.remove();
-    return li;
-  }));
-  $("ledger-empty").hidden = lines.length > 0;
-}
-
-function renderLive() {
-  const whens = record.whens;
-  const tops = whens.filter((w) => !w.bound_to);
-  const childrenOf = (id) => whens.filter((w) => w.bound_to === id);
-  const today = startOfDay().getTime();
-  const doneToday = (id) => record.facts.filter((k) =>
-    k.about === id && !isSystem(k) && !isReconciliation(k) && !corrected.has(k.id) && new Date(k.happened_at).getTime() >= today);
-
-  const host = $("bundles");
-  host.replaceChildren();
-  const tpl = $("when-row");
-
-  const row = (w) => {
-    const li = tpl.content.firstElementChild.cloneNode(true);
-    li.dataset.id = w.id;
-    if (w.affirmed_by === "ai") li.classList.add("ai");
-    li.querySelector(".when-words").textContent = w.words;
-    const cond = li.querySelector(".when-cond");
-    cond.textContent = w.condition_words ?? "";
-    const done = doneToday(w.id);
-    if (done.length) {
-      const p = document.createElement("p");
-      p.className = "when-done";
-      p.textContent = done.length === 1 ? `recorded ${fmtTime(done[0].happened_at)}: ${done[0].said}` : `recorded ${done.length} times today`;
-      li.querySelector(".when-main").appendChild(p);
-    }
-    const btn = li.querySelector("button.did");
-    const form = li.querySelector(".did-form");
-    if (w.affirmed_by === "ai") { btn.remove(); form.remove(); return li; }
-    btn.addEventListener("click", () => {
-      form.hidden = !form.hidden;
-      if (!form.hidden) { form.elements.when.value = localInputValue(); form.elements.said.focus(); }
-    });
-    form.querySelector(".cancel").addEventListener("click", () => { form.hidden = true; });
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const submit = form.querySelector("button.primary");
-      submit.disabled = true;
-      try {
-        await call("record", {
-          said: form.elements.said.value.trim() || "Did it.",
-          source: name(),
-          about: w.id,
-          happened_at: fromInput(form.elements.when.value),
-          shape: { via: "when_fire_web", round: w.shape?.round ?? undefined },
-        });
-        status("Recorded.");
-        await load();
-      } catch (err) {
-        status(`Not recorded: ${err.message}`, 6000);
-        submit.disabled = false;
-      }
-    });
-    return li;
-  };
-
-  const group = (title, untilWords, members) => {
-    const div = document.createElement("div");
-    div.className = "bundle";
-    if (title) { const p = document.createElement("p"); p.className = "bundle-words"; p.textContent = title; div.appendChild(p); }
-    if (untilWords) { const p = document.createElement("p"); p.className = "bundle-until"; p.textContent = `until ${untilWords}`; div.appendChild(p); }
-    const ul = document.createElement("ul");
-    ul.className = "whens";
-    for (const w of members) ul.appendChild(row(w));
-    div.appendChild(ul);
-    return div;
-  };
-
-  const standaloneAi = [];
-  for (const top of tops) {
-    const kids = childrenOf(top.id);
-    if (kids.length) {
-      const mine = kids.filter((w) => w.affirmed_by !== "ai");
-      const theirs = kids.filter((w) => w.affirmed_by === "ai");
-      host.appendChild(group(top.words, top.until_words, [...mine, ...theirs]));
-    } else if (top.affirmed_by === "ai") {
-      standaloneAi.push(top);
-    } else {
-      host.appendChild(group(null, top.until_words, [top]));
-    }
-  }
-  if (standaloneAi.length) host.appendChild(group("The system's own", null, standaloneAi));
-  $("live-empty").hidden = whens.length > 0;
-}
-
-function renderRecordForm() {
-  const sel = $("record-about");
-  const keep = sel.value;
-  sel.replaceChildren(new Option("Nothing in particular", ""));
-  for (const w of record.whens) {
-    if (w.affirmed_by === "ai") continue;
-    sel.appendChild(new Option(w.words.length > 60 ? w.words.slice(0, 57) + "…" : w.words, w.id));
-  }
-  sel.value = keep;
-  if (!$("record-when").value) $("record-when").value = localInputValue();
-}
-
-function renderNight() {
-  const recon = record.facts.filter((k) => isReconciliation(k) && k.shape?.for && !corrected.has(k.id));
-  const host = $("reconciliation");
-  host.replaceChildren();
-  if (!recon.length) { $("night-empty").hidden = false; return; }
-  $("night-empty").hidden = true;
-  const latest = recon.map((k) => k.shape.for).sort().at(-1);
-  const night = recon.filter((k) => k.shape.for === latest);
-  const summary = night.find((k) => k.shape.kind === "reconciliation_summary");
-  const items = night.filter((k) => k.shape.kind === "reconciliation");
-  const heading = document.createElement("p");
-  heading.className = "recon-date";
-  heading.textContent = new Date(`${latest}T12:00:00`).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })
-    + (summary ? "" : ", written by hand");
-  host.appendChild(heading);
-  if (summary) {
-    const p = document.createElement("p");
-    p.className = "recon-summary";
-    p.textContent = summary.said.replace(/^Reconciled, \S+: \d+ items?\.\s*/, "");
-    host.appendChild(p);
-  }
-  for (const k of items) {
-    const p = document.createElement("p");
-    p.className = "recon-item";
-    const about = document.createElement("span");
-    about.className = "about";
-    about.textContent = k.about ? wordsFor(k.about).split(".")[0] : "";
-    p.appendChild(about);
-    p.appendChild(document.createTextNode(k.said.replace(/^Reconciled, \S+\.\s*/, "")));
-    host.appendChild(p);
-  }
-  const h = summary?.shape?.health;
-  if (h && typeof h === "object") {
-    const p = document.createElement("p");
-    p.className = "recon-health";
-    p.textContent = `Heartbeat: ${h.heartbeat_runs_24h ?? "?"} beats in 24 hours, ${h.heartbeat_failures_24h ?? "?"} failed.  Last look by the watch: ${h.last_presented_at ? fmtTime(h.last_presented_at) : "unknown"}.`;
-    host.appendChild(p);
-  }
-}
-
-// --- the free record form --------------------------------------------------------
-$("record-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const btn = e.target.querySelector("button.primary");
-  btn.disabled = true;
-  try {
-    await call("record", {
-      said: $("record-said").value.trim(),
-      source: name(),
-      about: $("record-about").value || undefined,
-      happened_at: fromInput($("record-when").value),
-      shape: { via: "when_fire_web" },
-    });
-    $("record-said").value = "";
-    $("record-when").value = localInputValue();
-    status("Recorded.");
-    await load();
-  } catch (err) {
-    status(`Not recorded: ${err.message}`, 6000);
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-// --- name, install hint, service worker ---------------------------------------------
-$("name").value = name();
-$("name").addEventListener("change", () => localStorage.setItem("wf_name", $("name").value.trim() || "stacy"));
-
-const standalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
-if (!standalone && /iPhone|iPad/.test(navigator.userAgent)) $("install-hint").hidden = false;
-
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
-
-$("today-date").textContent = new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
-
-// --- the key, when the address did not carry it (an installed app opens at its root) ------------
-$("key-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const raw = $("key-input").value.trim();
-  const m = raw.match(/token=([A-Za-z0-9]+)/);
-  const key = m ? m[1] : raw.replace(/[^A-Za-z0-9]/g, "");
-  if (!key) return;
-  localStorage.setItem("wf_token", key);
-  token = key;
-  $("key-form").hidden = true;
-  load().catch((err) => status(err.message, 60000));
-});
-
-// --- go ----------------------------------------------------------------------------
-if (!token) {
-  $("key-form").hidden = false;
-  $("key-input").focus();
-} else {
-  load().catch((err) => {
-    status(err.message, 60000);
-    if (/refused/.test(err.message)) { localStorage.removeItem("wf_token"); $("key-form").hidden = false; }
+function keyForm() {
+  const form = $("key-form"); if (!form) return;
+  if (!token()) { form.hidden = false; $("main")?.classList.add("locked"); }
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const raw = $("key-input").value.trim();
+    let key = raw;
+    try { const u = new URL(raw); key = u.searchParams.get("token") ?? raw; const d = u.pathname.split("/").pop(); if (d) store.set("wf_door", d); const s = u.searchParams.get("schema"); if (s) store.set("wf_schema", s); } catch { /* a bare key */ }
+    if (!key) return;
+    store.set("wf_token", key);
+    location.reload();
   });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && token) load().catch(() => {}); });
 }
+
+// A read, shared by the pages and kept for a minute so the tabs feel instant.
+let cache = null;
+async function readRecord(opts = {}, fresh = false) {
+  const key = JSON.stringify(opts);
+  if (!fresh && cache && cache.key === key && Date.now() - cache.at < 60000) return cache.data;
+  const data = await call("read", opts);
+  cache = { key, at: Date.now(), data };
+  return data;
+}
+
+// Things the person wrote that did not reach the record yet (no network, a refused key): kept and retried.
+const PENDING = "wf_pending";
+const pending = {
+  list: () => { try { return JSON.parse(store.get(PENDING, "[]")); } catch { return []; } },
+  save: (l) => store.set(PENDING, JSON.stringify(l)),
+  add(item) { const l = this.list(); l.push({ ...item, queued_at: new Date().toISOString() }); this.save(l); },
+  async flush() {
+    const l = this.list(); if (!l.length) return 0;
+    const left = []; let sent = 0;
+    for (const it of l) {
+      try { await call("record", it.args); sent++; } catch (e) { if (needKey(e)) { left.push(it); break; } left.push(it); }
+    }
+    this.save(left); return sent;
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
+// Navigation: the same bar on every page; the current page is marked.
+// ---------------------------------------------------------------------------------------------
+function nav() {
+  const page = document.body.dataset.page;
+  document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.page === page) a.setAttribute("aria-current", "page"); });
+}
+
+// ---------------------------------------------------------------------------------------------
+// The pages.
+// ---------------------------------------------------------------------------------------------
+const pages = {};
+
+// Record: what happened, in the person's words, with the time it happened first.  The recent log below.
+pages.record = async function () {
+  const form = $("record-form"), said = $("said"), when = $("happened"), about = $("about"), pic = $("picture"), thumb = $("thumb");
+  let timeTouched = false, picture = null;
+  const setNow = () => { when.value = inputValue(); timeTouched = false; when.classList.remove("touched"); };
+  setNow();
+  when.addEventListener("input", () => { timeTouched = true; when.classList.add("touched"); });
+  $("now").addEventListener("click", setNow);
+  said.addEventListener("input", () => { said.style.height = "auto"; said.style.height = `${Math.min(said.scrollHeight, 320)}px`; });
+  pic.addEventListener("change", async () => {
+    const f = pic.files?.[0]; if (!f) { picture = null; thumb.hidden = true; return; }
+    picture = await shrink(f);
+    thumb.src = `data:${picture.media_type};base64,${picture.base64}`; thumb.hidden = false;
+    if (!timeTouched && f.lastModified && Date.now() - f.lastModified > 5 * 60000) { when.value = inputValue(new Date(f.lastModified)); timeTouched = true; when.classList.add("touched"); }
+  });
+  $("clear-picture").addEventListener("click", () => { pic.value = ""; picture = null; thumb.hidden = true; });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const words = said.value.trim();
+    if (!words && !picture) { said.focus(); return; }
+    const args = { said: words || "(picture)", shape: { via: "when_fire_web" } };
+    if (timeTouched && when.value) args.happened_at = new Date(when.value).toISOString();
+    if (about.value) args.about = about.value;
+    if (picture) args.picture = picture;
+    const btn = $("record-btn"); btn.disabled = true; btn.textContent = "Recording…";
+    try {
+      await call("record", args);
+      status(args.happened_at ? `Recorded, as of ${fmtStamp(args.happened_at)}.` : "Recorded.", "ok");
+      said.value = ""; said.style.height = ""; about.value = ""; pic.value = ""; picture = null; thumb.hidden = true; setNow();
+      await renderLog(true);
+    } catch (err) {
+      if (needKey(err)) { status("The key was refused.  Paste the address again.", "warn", 0); }
+      else {
+        pending.add({ args });
+        status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000);
+        said.value = ""; said.style.height = ""; picture = null; thumb.hidden = true; setNow();
+        renderPending();
+      }
+    } finally { btn.disabled = false; btn.textContent = "Record"; }
+  });
+
+  $("retry").addEventListener("click", async () => { const n = await pending.flush(); status(n ? `${n} sent.` : "Still waiting.", n ? "ok" : "warn"); renderPending(); if (n) renderLog(true); });
+  renderPending();
+  const flushed = await pending.flush().catch(() => 0);
+  if (flushed) { status(`${flushed} kept entr${flushed === 1 ? "y" : "ies"} sent.`, "ok"); renderPending(); }
+  await renderLog();
+
+  function renderPending() {
+    const l = pending.list(); const box = $("pending");
+    box.hidden = l.length === 0;
+    $("pending-list").replaceChildren(...l.map((it) => el("li", {}, el("span", { class: "words" }, it.args.said), el("span", { class: "meta" }, `written ${relative(it.queued_at)}`))));
+  }
+  async function renderLog(fresh = false) {
+    const log = $("log"), empty = $("log-empty");
+    try {
+      const rec = await readRecord({ since: hoursAgo(60), limit: "all", notes: false }, fresh);
+      fillAbout(rec.whens);
+      const me = String(rec.person?.name ?? "").toLowerCase();
+      const facts = rec.facts.filter((f) => !isNote(f) && f.kind === "world").sort((a, b) => (a.happened_at < b.happened_at ? 1 : -1));
+      const corrected = new Set(facts.map((f) => f.corrects).filter(Boolean));
+      const whenById = new Map(rec.whens.map((w) => [w.id, w]));
+      const groups = new Map();
+      for (const f of facts) { const k = dayKey(f.happened_at); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+      log.replaceChildren(...[...groups.entries()].map(([k, fs]) => el("section", { class: "day" },
+        el("h3", {}, k === todayKey() ? "Today" : fmtDayLong(fs[0].happened_at)),
+        el("ol", { class: "facts" }, fs.map((f) => el("li", { class: `fact${corrected.has(f.id) ? " corrected" : ""}${f.said_by !== me ? " other" : ""}` },
+          el("div", { class: "line" },
+            el("time", { datetime: f.happened_at }, fmtTime(f.happened_at)),
+            el("span", { class: "words" }, f.said),
+          ),
+          el("div", { class: "meta" },
+            f.said_by !== me ? el("span", { class: "badge" }, f.said_by) : null,
+            f.about && whenById.get(f.about) ? el("span", { class: "about" }, `about: ${firstWords(whenById.get(f.about).words, 6)}`) : null,
+            f.cites ? el("span", { class: "badge" }, "picture") : null,
+            f.corrects ? el("span", { class: "badge" }, "corrects an earlier entry") : null,
+            corrected.has(f.id) ? el("span", { class: "badge" }, "corrected later") : null,
+            minutesApart(f.recorded_at, f.happened_at) > 15 ? el("span", { class: "footnote" }, `entered ${fmtStamp(f.recorded_at)}`) : null,
+          ),
+        ))),
+      )));
+      empty.hidden = facts.length > 0;
+    } catch (err) {
+      if (!needKey(err)) status(`The record did not answer: ${err.message}`, "warn", 6000);
+    }
+  }
+  function fillAbout(whens) {
+    const current = about.value;
+    const mine = whens.filter(isPersonSide).filter((w) => w.kind === "worded" || w.kind === "tick").sort((a, b) => (a.words < b.words ? -1 : 1));
+    about.replaceChildren(el("option", { value: "" }, "about a when (optional)"), ...mine.map((w) => el("option", { value: w.id }, short(w.words, 70))));
+    about.value = current;
+  }
+};
+
+// A picture is shrunk on the phone before it travels: long side 1600, JPEG.
+async function shrink(file) {
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) { const b64 = await toBase64(file); return { base64: b64, media_type: file.type || "image/jpeg", title: file.name }; }
+  const max = 1600, scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bitmap.width * scale); c.height = Math.round(bitmap.height * scale);
+  c.getContext("2d").drawImage(bitmap, 0, 0, c.width, c.height);
+  const url = c.toDataURL("image/jpeg", 0.85);
+  return { base64: url.split(",")[1], media_type: "image/jpeg", title: file.name };
+}
+const toBase64 = (file) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = no; r.readAsDataURL(file); });
+
+// Whens: what he said he would do, as it stands, with the latest reading beside each.
+pages.whens = async function () {
+  const list = $("whens"), toggle = $("show-ended");
+  toggle.checked = store.get("wf_show_ended") === "1";
+  toggle.addEventListener("change", () => { store.set("wf_show_ended", toggle.checked ? "1" : "0"); render(true); });
+  await render();
+  async function render(fresh = false) {
+    try {
+      const rec = await readRecord({ since: hoursAgo(72), limit: "all", fires: true, include_inactive: toggle.checked }, fresh);
+      const snaps = new Map((rec.snapshots ?? []).filter((s) => s.subject_kind === "when").map((s) => [s.subject_id, s]));
+      const whens = rec.whens.filter(isPersonSide);
+      const byId = new Map(whens.map((w) => [w.id, w]));
+      const superseded = new Set(whens.map((w) => w.supersedes).filter(Boolean));
+      const live = whens.filter((w) => !superseded.has(w.id) && (!w.until_at || new Date(w.until_at) > new Date()));
+      const ended = whens.filter((w) => !live.includes(w));
+      // bundles: a when whose id is another's bundle is the head
+      const heads = new Map();
+      for (const w of live) { const h = w.bundle && byId.get(w.bundle) ? w.bundle : w.id; if (!heads.has(h)) heads.set(h, []); if (h !== w.id) heads.get(h).push(w); }
+      const today = todayKey();
+      const readings = (rec.fires ?? []).filter((x) => ["met", "silence"].includes(x.kind));
+      const latest = (w) => readings.filter((x) => x.when_id === w.id).sort((a, b) => (a.fired_at < b.fired_at ? 1 : -1))[0];
+      const card = (w, inBundle = false) => {
+        const r = latest(w); const s = snaps.get(w.id);
+        const tally = s?.shape?.tally;
+        return el("article", { class: `when${inBundle ? " in-bundle" : ""}${w.kind === "tick" ? " crisp" : ""}` },
+          el("p", { class: "words" }, w.words),
+          w.condition_words ? el("p", { class: "cond" }, el("span", { class: "k" }, "when "), w.condition_words) : null,
+          w.until_words ? el("p", { class: "cond" }, el("span", { class: "k" }, "until "), w.until_words) : null,
+          w.reasons?.length ? el("p", { class: "because" }, el("span", { class: "k" }, "because "), w.reasons.map((x) => x.words ?? x.name).join("; ")) : null,
+          r ? el("p", { class: `reading ${r.kind}` }, r.kind === "met" ? (r.context?.late ? "met, late" : "met") : "silence",
+            el("span", { class: "meta" }, ` · ${r.context?.moment === today ? "today" : fmtDay(r.fired_at)}${r.context?.reason ? `: ${r.context.reason}` : ""}`)) : el("p", { class: "reading open" }, "open", el("span", { class: "meta" }, " · no reading yet")),
+          s ? el("details", { class: "stands" }, el("summary", {}, `what stands${tally?.facts ? ` · ${tally.facts} fact${tally.facts === 1 ? "" : "s"}${tally.amount ? `, ${tally.amount}` : ""}` : ""} · as of ${fmtStamp(s.watermark)}`), el("p", {}, s.says)) : null,
+          w.after?.length ? el("p", { class: "meta" }, `comes after ${w.after.length} earlier wording${w.after.length === 1 ? "" : "s"}`) : null,
+          el("p", { class: "meta" }, `asserted ${fmtStamp(w.asserted_at)} by ${w.asserted_by}`),
+        );
+      };
+      list.replaceChildren(...[...heads.entries()].map(([h, members]) => {
+        const head = byId.get(h);
+        if (!members.length) return card(head);
+        return el("section", { class: "bundle" }, card(head), el("div", { class: "members" }, members.map((m) => card(m, true))));
+      }));
+      if (toggle.checked && ended.length) list.append(el("section", { class: "ended" }, el("h3", {}, "Ended and earlier wordings"), ended.sort((a, b) => (a.asserted_at < b.asserted_at ? 1 : -1)).map((w) => card(w))));
+      $("whens-empty").hidden = live.length > 0;
+    } catch (err) { if (!needKey(err)) status(`The record did not answer: ${err.message}`, "warn", 6000); }
+  }
+};
+
+// Thoughts: what stands now, written by the Reconciler, and the Thinker's own notes.
+pages.thoughts = async function () {
+  const list = $("thoughts"), toggle = $("show-notes");
+  toggle.checked = store.get("wf_show_notes") === "1";
+  toggle.addEventListener("change", () => { store.set("wf_show_notes", toggle.checked ? "1" : "0"); render(true); });
+  await render();
+  async function render(fresh = false) {
+    try {
+      const rec = await readRecord({ since: hoursAgo(24 * 7), limit: "all", notes: toggle.checked, fires: false, include_inactive: true }, fresh);
+      const byId = new Map(rec.whens.map((w) => [w.id, w]));
+      const items = [];
+      for (const s of rec.snapshots ?? []) items.push({ at: s.written_at, kind: s.subject_kind, s });
+      if (toggle.checked) for (const f of rec.facts.filter((f) => isNote(f) && !/^error:/.test(f.said_by) && ["thinker", "claude", "ai"].includes(f.said_by))) items.push({ at: f.recorded_at, kind: "note", f });
+      items.sort((a, b) => (a.at < b.at ? 1 : -1));
+      list.replaceChildren(...items.map((it) => {
+        if (it.kind === "note") return el("article", { class: "thought note" }, el("h3", {}, `${it.f.said_by}, ${fmtStamp(it.f.recorded_at)}`), el("p", {}, it.f.said));
+        const s = it.s;
+        const [main, ...rest] = s.says.split("\n\n");
+        const title = s.subject_kind === "day" ? `The day, ${fmtDayLong(s.shape?.day ? `${s.shape.day}T12:00:00` : s.watermark)}`
+          : s.subject_kind === "episode" ? `Episode, ${fmtStamp(s.watermark)}`
+          : s.subject_kind === "when" ? `When: ${firstWords(byId.get(s.subject_id)?.words ?? "(an earlier wording)", 8)}`
+          : `${s.subject_kind}`;
+        return el("article", { class: `thought ${s.subject_kind}` }, el("h3", {}, title), el("p", {}, main), rest.length ? el("p", { class: "footnote" }, rest.join("  ")) : null,
+          el("p", { class: "meta" }, `as of ${fmtStamp(s.watermark)} · written ${relative(s.written_at)} by ${s.written_by}`));
+      }));
+      $("thoughts-empty").hidden = items.length > 0;
+    } catch (err) { if (!needKey(err)) status(`The record did not answer: ${err.message}`, "warn", 6000); }
+  }
+};
+
+// Questions: what the Thinker wants to know, and the outbox (the morning page lands here until a phat client).
+pages.questions = async function () {
+  await render();
+  async function render(fresh = false) {
+    try {
+      const rec = await readRecord({ since: hoursAgo(24), limit: "20", fires: false }, fresh);
+      const qs = rec.questions ?? [], tasks = rec.tasks ?? [];
+      const mine = qs.filter((q) => q.ask_of === "person"), theirs = qs.filter((q) => q.ask_of !== "person");
+      $("asked").replaceChildren(...mine.map((q) => {
+        const box = el("textarea", { rows: 2, placeholder: "In your words…" });
+        const btn = el("button", { class: "primary small", type: "button" }, "Answer");
+        btn.addEventListener("click", async () => {
+          const words = box.value.trim(); if (!words) return;
+          btn.disabled = true;
+          try { await call("answer", { question: q.id, words }); status("Answered; it is on the record.", "ok"); await render(true); }
+          catch (e) { status(`Not answered: ${e.message}`, "warn", 6000); btn.disabled = false; }
+        });
+        return el("article", { class: "question" }, el("p", { class: "words" }, q.words), el("p", { class: "meta" }, `asked ${fmtStamp(q.asked_at)} by ${q.asked_by}`), box, btn);
+      }));
+      $("asked-empty").hidden = mine.length > 0;
+      $("looking").replaceChildren(...theirs.map((q) => el("article", { class: "question quiet" }, el("p", { class: "words" }, q.words), el("p", { class: "meta" }, `the Thinker is asking the ${q.ask_of} · since ${fmtStamp(q.asked_at)}`))));
+      $("looking-empty").hidden = theirs.length > 0;
+      $("tasks").replaceChildren(...tasks.sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).map((t) => {
+        const btn = el("button", { class: "small", type: "button" }, "Done");
+        btn.addEventListener("click", async () => { btn.disabled = true; try { await call("did", { task: t.id, kind: "done", words: "marked done in the web client" }); await render(true); } catch (e) { status(e.message, "warn"); btn.disabled = false; } });
+        return el("article", { class: `task ${t.kind}` }, el("h3", {}, t.kind.replace(/_/g, " ")), el("pre", { class: "page" }, t.words), el("p", { class: "meta" }, `${fmtStamp(t.created_at)} by ${t.created_by}`), btn);
+      }));
+      $("tasks-empty").hidden = tasks.length > 0;
+    } catch (err) { if (!needKey(err)) status(`The record did not answer: ${err.message}`, "warn", 6000); }
+  }
+};
+
+// Settings: the key, the door, turbo, the system's health.
+pages.settings = async function () {
+  $("door").value = doorName(); $("schema").value = schema();
+  $("door-form").addEventListener("submit", (e) => { e.preventDefault(); store.set("wf_door", $("door").value.trim() || "when-fire-mcp"); store.set("wf_schema", $("schema").value.trim() || null); cache = null; status("Saved.", "ok"); renderHealth(); });
+  $("forget-key").addEventListener("click", () => { store.set("wf_token", null); cache = null; location.reload(); });
+  $("turbo-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const hours = Number($("turbo-hours").value || 0);
+    try { const r = await call("turbo", { hours }); status(hours > 0 ? `Watching closely until ${fmtStamp(r.turbo_until)}.` : "Turbo off.", "ok", 6000); } catch (err) { if (!needKey(err)) status(err.message, "warn", 6000); }
+  });
+  $("key-masked").textContent = token() ? `${token().slice(0, 4)}…${token().slice(-4)}` : "none";
+  $("address").textContent = `${BASE}${doorName()}`;
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  if (!standalone && /iPhone|iPad/.test(navigator.userAgent)) $("install-hint").hidden = false;
+  await renderHealth();
+  async function renderHealth() {
+    try {
+      const h = await call("health");
+      $("health").replaceChildren(...[
+        ["heartbeat last ran", h.heartbeat_last ? `${fmtStamp(h.heartbeat_last)} (${relative(h.heartbeat_last)})` : "never"],
+        ["last fact from the world", h.last_world_fact ? fmtStamp(h.last_world_fact) : "none"],
+        ["fires in 24 h", h.fires_24h], ["notes in 24 h", h.notes_24h],
+        ["actor errors in 24 h", (h.errors_24h ?? []).length ? (h.errors_24h ?? []).map((e) => e.said ?? JSON.stringify(e)).join("  ") : 0],
+        ["heartbeat errors in 24 h", h.heartbeat_errors_24h],
+        ["spent today", `$${Number(h.spent_today_usd ?? 0).toFixed(2)}`],
+        ["open questions", h.open_questions], ["open tasks", h.open_tasks],
+      ].map(([k, v]) => el("div", { class: "row" }, el("dt", {}, k), el("dd", {}, String(v)))));
+    } catch (err) { if (!needKey(err)) $("health").replaceChildren(el("div", { class: "row" }, el("dt", {}, "health"), el("dd", {}, `did not answer: ${err.message}`))); }
+  }
+};
+
+// ---------------------------------------------------------------------------------------------
+// Start.
+// ---------------------------------------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", async () => {
+  nav(); keyForm();
+  const d = $("today-date"); if (d) d.textContent = fmtDayLong(new Date().toISOString());
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
+  const page = pages[document.body.dataset.page];
+  if (page && token()) { try { await page(); } catch (err) { if (!needKey(err)) status(err.message, "warn", 8000); } }
+  else if (page) { keyForm(); }
+});

@@ -5,26 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>when fire</title>
   <meta name="description" content="What I said I would do, and what happened.">
-  <meta name="theme-color" content="#16201d">
-  <meta name="when-fire-connector" content="https://xmdrzegrkjdeibvxihih.supabase.co/functions/v1/when-fire-mcp">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f4efe6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15191c" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="when fire">
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
   <link rel="stylesheet" href="./styles.css">
 </head>
-<body>
+<body data-page="record">
   <header class="top">
-    <div class="brand">when fire</div>
-    <h1 id="today-date" class="date">…</h1>
+    <a class="brand" href="./">when fire</a>
+    <h1 class="title">Record</h1>
     <p id="status" class="status" hidden></p>
-    <form id="key-form" class="form" hidden>
+    <form id="key-form" class="form key" hidden>
       <label class="field">
         <span>This app needs its key.  Paste the full address you were given, or just the key.</span>
         <input id="key-input" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://…/when-fire-mcp?token=…">
@@ -32,81 +30,57 @@
       <button type="submit" class="primary">Open</button>
     </form>
   </header>
+  <main id="main">
 
-  <main>
-    <section id="today" aria-labelledby="today-h">
-      <h2 id="today-h">Today</h2>
-      <ol id="ledger" class="ledger"></ol>
-      <p id="ledger-empty" class="empty" hidden>Nothing recorded yet today.</p>
-    </section>
-
-    <section id="live" aria-labelledby="live-h">
-      <h2 id="live-h">Live</h2>
-      <div id="bundles"></div>
-      <p id="live-empty" class="empty" hidden>Nothing is live.  Affirm something and it shows up here.</p>
-    </section>
-
-    <section id="record" aria-labelledby="record-h">
-      <h2 id="record-h">Record something</h2>
+    <section class="record">
       <form id="record-form" class="form">
         <label class="field">
-          <span>What happened, in your words</span>
-          <textarea id="record-said" rows="2" placeholder="Eight at 120.  Called my sister.  Signed it." required></textarea>
+          <span class="visually-hidden">What happened</span>
+          <textarea id="said" rows="3" placeholder="What happened, in your words.  “Did a round.”  “Eight at 120.”" autocomplete="off" autocapitalize="sentences"></textarea>
         </label>
+        <div class="row time">
+          <label class="field grow">
+            <span>Happened</span>
+            <input id="happened" type="datetime-local">
+          </label>
+          <button id="now" type="button" class="ghost">Now</button>
+        </div>
         <div class="row">
           <label class="field grow">
-            <span>About</span>
-            <select id="record-about"><option value="">Nothing in particular</option></select>
+            <span class="visually-hidden">About a when</span>
+            <select id="about"><option value="">about a when (optional)</option></select>
           </label>
-          <label class="field">
-            <span>When</span>
-            <input id="record-when" type="datetime-local">
+          <label class="ghost button file">
+            <span>Picture</span>
+            <input id="picture" type="file" accept="image/*" capture="environment">
           </label>
         </div>
-        <button type="submit" class="primary">Record</button>
+        <div class="thumb-row">
+          <img id="thumb" class="thumb" alt="the picture to record" hidden>
+          <button id="clear-picture" type="button" class="link">remove picture</button>
+        </div>
+        <button id="record-btn" type="submit" class="primary big">Record</button>
       </form>
+      <section id="pending" class="pending" hidden>
+        <h3>Kept on this phone, not yet on the record</h3>
+        <ul id="pending-list"></ul>
+        <button id="retry" type="button" class="ghost">Send now</button>
+      </section>
+    </section>
+    <section class="log-section" aria-labelledby="recent-h">
+      <h2 id="recent-h">Recent</h2>
+      <div id="log"></div>
+      <p id="log-empty" class="empty" hidden>Nothing recorded in the last two days.</p>
     </section>
 
-    <section id="night" aria-labelledby="night-h">
-      <h2 id="night-h">Last night</h2>
-      <div id="reconciliation"></div>
-      <p id="night-empty" class="empty" hidden>No reconciliation yet.  The first one lands at 11:30 tonight.</p>
-    </section>
   </main>
-
-  <footer class="foot">
-    <label class="field inline">
-      <span>Facts are signed</span>
-      <input id="name" type="text" autocapitalize="off" autocomplete="off" spellcheck="false">
-    </label>
-    <p id="install-hint" hidden>To get notifications later, add this page to your Home Screen from the share menu.</p>
-    <p class="fine">Read through the when fire connector.  Nothing here is ever edited; a correction is a new fact.</p>
-  </footer>
-
-  <template id="when-row">
-    <li class="when">
-      <div class="when-main">
-        <p class="when-words"></p>
-        <p class="when-cond"></p>
-      </div>
-      <button type="button" class="did">Did it</button>
-      <form class="did-form" hidden>
-        <label class="field">
-          <span>Say it</span>
-          <input type="text" name="said" value="Did it.">
-        </label>
-        <label class="field">
-          <span>When</span>
-          <input type="datetime-local" name="when">
-        </label>
-        <div class="row">
-          <button type="submit" class="primary">Record</button>
-          <button type="button" class="quiet cancel">Cancel</button>
-        </div>
-      </form>
-    </li>
-  </template>
-
-  <script type="module" src="./app.js"></script>
+  <nav class="tabs" aria-label="Pages">
+    <a href="./" data-page="record"><span class="glyph">✎</span>Record</a>
+    <a href="./whens.html" data-page="whens"><span class="glyph">◎</span>Whens</a>
+    <a href="./thoughts.html" data-page="thoughts"><span class="glyph">☁</span>Thoughts</a>
+    <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
+    <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
+  </nav>
+  <script src="./app.js"></script>
 </body>
 </html>
