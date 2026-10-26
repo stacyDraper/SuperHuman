@@ -1,7 +1,7 @@
-// when fire, the web client.  Sunday, October 25, 2026.
+// when fire, the web client.  Sunday, October 25, 2026; the Today page and notifications, Monday, October 26.
 // Several pages, one navigation (a bar at the top of every page), one door: every page talks to the connector with the same verbs any AI uses.
 // The key rides on the page's address once (?token=...), then lives in this browser's storage.
-// Pages: record (index), whens, thoughts, questions, settings.  The body's data-page says which one this is.
+// Pages: today, record (index), whens, thoughts, questions, settings.  The body's data-page says which one this is.
 
 "use strict";
 
@@ -17,6 +17,7 @@ const params = new URLSearchParams(location.search);
 if (params.get("token")) { store.set("wf_token", params.get("token")); }
 if (params.get("schema") !== null) { store.set("wf_schema", params.get("schema") || null); }
 if (params.get("door")) { store.set("wf_door", params.get("door")); }
+const cameFor = params.get("when");                                             // a notification tapped: the step to show
 if ([...params.keys()].length) history.replaceState(null, "", location.pathname); // the key stays in storage, not in the bar
 
 const token = () => store.get("wf_token", "");
@@ -37,6 +38,15 @@ async function call(name, args = {}) {
   if (j?.result?.isError) throw new Error(text);
   return text ? JSON.parse(text) : null;
 }
+
+// The service worker cannot read this storage, yet a Done tapped on a notification must reach the record without the
+// page.  So while notifications are on, the door's address is also kept in the cache store, under one name; the worker
+// reads it there.  Forgetting the key, or turning notifications off, removes it.
+const KEY_CACHE = "when-fire-key";
+const keyCache = {
+  async put() { try { const c = await caches.open(KEY_CACHE); await c.put("./key", new Response(address(), { headers: { "content-type": "text/plain" } })); } catch { /* no cache store */ } },
+  async drop() { try { await caches.delete(KEY_CACHE); } catch { /* nothing to drop */ } },
+};
 
 // ---------------------------------------------------------------------------------------------
 // Time, in the device's zone.  The time a thing happened leads; the time it was entered is a footnote.
@@ -145,6 +155,52 @@ function nav() {
 // The pages.
 // ---------------------------------------------------------------------------------------------
 const pages = {};
+
+// Today: the routine as it stands for the day, read from the record (the today verb), one card per routine, its steps in
+// clock order.  Done records a fact about the step in the step's own words; the Watch reads met from it.  Nothing here
+// is hard coded: a routine is a bundle of whens on the person's side, marked routine in its shape.
+pages.today = async function () {
+  const box = $("routines"), empty = $("today-empty"), hint = $("notify-hint");
+  if ("Notification" in window && Notification.permission !== "granted") hint.hidden = false;
+  await render();
+  async function render() {
+    try {
+      const t = await call("today");
+      const whens = t.whens ?? [];
+      const byRoutine = new Map();
+      for (const w of whens) { const k = w.bundle ?? w.id; if (!byRoutine.has(k)) byRoutine.set(k, { name: w.routine, steps: [] }); byRoutine.get(k).steps.push(w); }
+      box.replaceChildren(...[...byRoutine.values()].map((r) => el("section", { class: "routine" },
+        byRoutine.size > 1 || r.name ? el("h2", {}, r.name ?? "the routine") : null,
+        r.steps.map((w) => step(w)),
+      )));
+      empty.hidden = whens.length > 0;
+      if (cameFor) { const target = box.querySelector(`[data-when="${cameFor}"]`); if (target) { target.classList.add("flash"); target.scrollIntoView({ block: "center" }); } }
+    } catch (err) { if (!needKey(err)) status(`The record did not answer: ${err.message}`, "warn", 6000); }
+  }
+  function step(w) {
+    const done = (w.facts_today ?? []).length;
+    const last = done ? w.facts_today[w.facts_today.length - 1] : null;
+    const state = w.reading === "met" ? el("p", { class: "state met" }, `met${last ? `, ${fmtTime(last.happened_at)}` : ""}`)
+      : w.reading === "silence" ? el("p", { class: "state silence" }, "silence")
+      : done ? el("p", { class: "state met" }, `done, ${fmtTime(last.happened_at)}${done > 1 ? ` (${done} times)` : ""}`)
+      : el("p", { class: "state" }, w.falls_today ? (w.condition_words ?? "open") : "not today");
+    const btn = el("button", { class: `small${done ? " ghost" : " primary"}`, type: "button" }, done ? "Again" : "Done");
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      const args = { said: w.words, about: w.id, shape: { via: "when_fire_web", done: true, routine: w.routine_name ?? null } };
+      try { await call("record", args); status(`Recorded, ${fmtTime(new Date().toISOString())}.`, "ok"); await render(); }
+      catch (err) {
+        if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
+        else { pending.add({ args }); status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000); btn.disabled = false; }
+      }
+    });
+    return el("article", { class: `step${done ? " done" : ""}${w.falls_today ? "" : " off-day"}`, "data-when": w.id },
+      el("span", { class: "clock" }, w.at ?? "—"),
+      el("div", {}, el("p", { class: "words" }, w.words), state),
+      btn,
+    );
+  }
+};
 
 // Record: what happened, in the person's words, with the time it happened first.  The recent log below, paged.
 pages.record = async function () {
@@ -270,6 +326,8 @@ async function shrink(file) {
   const url = c.toDataURL("image/jpeg", 0.85);
   return { base64: url.split(",")[1], media_type: "image/jpeg", title: file.name };
 }
+// The push service's public key arrives as url-safe base64; the browser wants bytes.
+function keyBytes(b64) { const s = (b64 + "=".repeat((4 - b64.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/"); const raw = atob(s); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); }
 const toBase64 = (file) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = no; r.readAsDataURL(file); });
 
 // Whens: what he said he would do, as it stands, with the latest reading beside each.
@@ -390,7 +448,53 @@ pages.questions = async function () {
 pages.settings = async function () {
   $("door").value = doorName(); $("schema").value = schema();
   $("door-form").addEventListener("submit", (e) => { e.preventDefault(); store.set("wf_door", $("door").value.trim() || "when-fire-mcp"); store.set("wf_schema", $("schema").value.trim() || null); cache = null; status("Saved.", "ok"); renderHealth(); });
-  $("forget-key").addEventListener("click", () => { store.set("wf_token", null); cache = null; location.reload(); });
+  $("forget-key").addEventListener("click", async () => { store.set("wf_token", null); cache = null; await keyCache.drop(); location.reload(); });
+
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+
+  // Notifications: the phone subscribes with the browser's push service, the subscription goes to the record (the
+  // subscribe verb), and the notify handler sends each step of the routine to it at its minute.
+  const nState = $("notify-state"), nOn = $("notify-on"), nOff = $("notify-off");
+  const canPush = "Notification" in window && "PushManager" in window && "serviceWorker" in navigator;
+  nOn.addEventListener("click", async () => {
+    nOn.disabled = true;
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { await showNotify(); return; }
+      const reg = await navigator.serviceWorker.ready;
+      const { public_key } = await call("subscribe", {});
+      if (!public_key) throw new Error("the record has no push key");
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(public_key) });
+      const j = sub.toJSON();
+      await call("subscribe", { endpoint: j.endpoint, keys: j.keys, agent: navigator.userAgent.slice(0, 200) });
+      await keyCache.put();
+      status("Notifications on.  Each step reaches this phone at its minute.", "ok", 6000);
+    } catch (err) { if (!needKey(err)) status(`Not turned on: ${err.message}`, "warn", 8000); }
+    finally { nOn.disabled = false; await showNotify(); }
+  });
+  nOff.addEventListener("click", async () => {
+    nOff.disabled = true;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) { await call("subscribe", { endpoint: sub.endpoint, drop: true }).catch(() => {}); await sub.unsubscribe(); }
+      await keyCache.drop();
+      status("Notifications off.", "ok");
+    } catch (err) { status(`Not turned off: ${err.message}`, "warn", 8000); }
+    finally { nOff.disabled = false; await showNotify(); }
+  });
+  await showNotify();
+  async function showNotify() {
+    nOn.hidden = true; nOff.hidden = true;
+    if (!canPush) { nState.textContent = standalone || !/iPhone|iPad/.test(navigator.userAgent) ? "This browser cannot receive notifications." : "Add the app to the home screen first; Safari only delivers notifications to an installed app."; return; }
+    if (Notification.permission === "denied") { nState.textContent = "Blocked.  Allow notifications for this site in the phone's settings, then come back."; return; }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) { nState.textContent = `On, on this phone.`; nOff.hidden = false; await keyCache.put(); }
+      else { nState.textContent = "Off."; nOn.hidden = false; }
+    } catch (err) { nState.textContent = `Could not tell: ${err.message}`; }
+  }
   $("turbo-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const hours = Number($("turbo-hours").value || 0);
@@ -398,7 +502,6 @@ pages.settings = async function () {
   });
   $("key-masked").textContent = token() ? `${token().slice(0, 4)}…${token().slice(-4)}` : "none";
   $("address").textContent = `${BASE}${doorName()}`;
-  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   if (!standalone && /iPhone|iPad/.test(navigator.userAgent)) $("install-hint").hidden = false;
   await renderHealth();
   async function renderHealth() {
@@ -423,7 +526,11 @@ pages.settings = async function () {
 document.addEventListener("DOMContentLoaded", async () => {
   nav(); keyForm();
   const d = $("today-date"); if (d) d.textContent = fmtDayLong(new Date().toISOString());
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    if (token() && "PushManager" in window) navigator.serviceWorker.ready.then((reg) => reg.pushManager.getSubscription()).then((sub) => { if (sub) keyCache.put(); }).catch(() => {});
+    navigator.serviceWorker.addEventListener("message", (e) => { if (e.data?.recorded && document.body.dataset.page === "today") location.reload(); });
+  }
   const page = pages[document.body.dataset.page];
   if (page && token()) { try { await page(); } catch (err) { if (!needKey(err)) status(err.message, "warn", 8000); } }
   else if (page) { keyForm(); }

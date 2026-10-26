@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=20261025b">
+  <link rel="stylesheet" href="./styles.css?v=20261026a">
 </head>
 <body data-page="settings">
   <header class="top">
@@ -45,6 +45,15 @@
       <p class="hint">The Watch's poll runs every thirty minutes until then, then falls back to every three hours.  Zero turns it off.</p>
     </section>
     <section>
+      <h2>Notifications</h2>
+      <p id="notify-state" class="hint">Checking…</p>
+      <div class="row">
+        <button id="notify-on" type="button" class="primary small" hidden>Turn on</button>
+        <button id="notify-off" type="button" class="ghost small" hidden>Turn off</button>
+      </div>
+      <p class="hint">Each step of the routine reaches this phone at its minute, from the record, not from a timer in the app.  On an iPhone the app must be on the home screen first.</p>
+    </section>
+    <section>
       <h2>The door</h2>
       <form id="door-form" class="form">
         <label class="field"><span>function</span><input id="door" type="text" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
@@ -61,12 +70,13 @@
 
   </main>
   <nav class="tabs" aria-label="Pages">
+    <a href="./today.html" data-page="today"><span class="glyph">☀</span>Today</a>
     <a href="./" data-page="record"><span class="glyph">✎</span>Record</a>
     <a href="./whens.html" data-page="whens"><span class="glyph">◎</span>Whens</a>
     <a href="./thoughts.html" data-page="thoughts"><span class="glyph">☁</span>Thoughts</a>
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261025b"></script>
+  <script src="./app.js?v=20261026a"></script>
 </body>
 </html>

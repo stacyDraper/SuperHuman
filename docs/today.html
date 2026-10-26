@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>when fire · today</title>
+  <meta name="description" content="What I said I would do, and what happened.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f4efe6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15191c" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="when fire">
+  <link rel="apple-touch-icon" href="./icon-512.png">
+  <link rel="icon" href="./icon-512.png" type="image/png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css?v=20261026a">
+</head>
+<body data-page="today">
+  <header class="top">
+    <a class="brand" href="./">when fire</a>
+    <h1 class="title">Today</h1>
+    <p id="status" class="status" hidden></p>
+    <form id="key-form" class="form key" hidden>
+      <label class="field">
+        <span>This app needs its key.  Paste the full address you were given, or just the key.</span>
+        <input id="key-input" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://…/when-fire-mcp?token=…">
+      </label>
+      <button type="submit" class="primary">Open</button>
+    </form>
+  </header>
+  <main id="main">
+
+    <p class="lead"><span id="today-date"></span>.  The routine as it stands, in clock order.  Tap done when a step is done; that is the fact, and the Watch reads met from it.</p>
+    <div id="routines"></div>
+    <p id="today-empty" class="empty" hidden>No routine on your side of the record yet.  A routine is a bundle of whens, asserted with your yes.</p>
+    <p id="notify-hint" class="hint small" hidden>Notifications are off on this phone.  Turn them on in Settings and each step reaches you at its minute.</p>
+
+  </main>
+  <nav class="tabs" aria-label="Pages">
+    <a href="./today.html" data-page="today"><span class="glyph">☀</span>Today</a>
+    <a href="./" data-page="record"><span class="glyph">✎</span>Record</a>
+    <a href="./whens.html" data-page="whens"><span class="glyph">◎</span>Whens</a>
+    <a href="./thoughts.html" data-page="thoughts"><span class="glyph">☁</span>Thoughts</a>
+    <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
+    <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
+  </nav>
+  <script src="./app.js?v=20261026a"></script>
+</body>
+</html>

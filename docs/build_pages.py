@@ -21,7 +21,7 @@ HEAD = """<!doctype html>
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=20261025b">
+  <link rel="stylesheet" href="./styles.css?v=20261026a">
 </head>
 <body data-page="{page}">
   <header class="top">
@@ -40,18 +40,25 @@ HEAD = """<!doctype html>
 {main}
   </main>
   <nav class="tabs" aria-label="Pages">
+    <a href="./today.html" data-page="today"><span class="glyph">☀</span>Today</a>
     <a href="./" data-page="record"><span class="glyph">✎</span>Record</a>
     <a href="./whens.html" data-page="whens"><span class="glyph">◎</span>Whens</a>
     <a href="./thoughts.html" data-page="thoughts"><span class="glyph">☁</span>Thoughts</a>
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261025b"></script>
+  <script src="./app.js?v=20261026a"></script>
 </body>
 </html>
 """
 
 PAGES = {
+    "today.html": dict(page="today", title="when fire · today", heading="Today", main="""
+    <p class="lead"><span id="today-date"></span>.  The routine as it stands, in clock order.  Tap done when a step is done; that is the fact, and the Watch reads met from it.</p>
+    <div id="routines"></div>
+    <p id="today-empty" class="empty" hidden>No routine on your side of the record yet.  A routine is a bundle of whens, asserted with your yes.</p>
+    <p id="notify-hint" class="hint small" hidden>Notifications are off on this phone.  Turn them on in Settings and each step reaches you at its minute.</p>
+"""),
     "index.html": dict(page="record", title="when fire", heading="Record", main="""
     <section class="record">
       <form id="record-form" class="form">
@@ -138,6 +145,15 @@ PAGES = {
         <button type="submit" class="primary">Turbo</button>
       </form>
       <p class="hint">The Watch's poll runs every thirty minutes until then, then falls back to every three hours.  Zero turns it off.</p>
+    </section>
+    <section>
+      <h2>Notifications</h2>
+      <p id="notify-state" class="hint">Checking…</p>
+      <div class="row">
+        <button id="notify-on" type="button" class="primary small" hidden>Turn on</button>
+        <button id="notify-off" type="button" class="ghost small" hidden>Turn off</button>
+      </div>
+      <p class="hint">Each step of the routine reaches this phone at its minute, from the record, not from a timer in the app.  On an iPhone the app must be on the home screen first.</p>
     </section>
     <section>
       <h2>The door</h2>
