@@ -3,7 +3,7 @@
 // Receives the routine's pushes from the notify handler and shows each step as a notification.  Done on the
 // notification records the fact straight from here, through the door's address the page keeps in the key cache;
 // a plain tap opens the Today page on that step.
-const SHELL = "when-fire-shell-v5";
+const SHELL = "when-fire-shell-v6";
 const ASSETS = ["./", "./index.html", "./today.html", "./whens.html", "./thoughts.html", "./questions.html", "./settings.html", "./app.js", "./styles.css", "./icon-512.png", "./manifest.webmanifest"];
 const SCOPE = self.registration.scope;
 const KEY_CACHE = "when-fire-key";
@@ -38,10 +38,10 @@ self.addEventListener("push", (e) => {
     body: d.body ?? "",
     icon: "./icon-512.png",
     badge: "./icon-512.png",
-    tag: d.when ? `when-${d.when}` : undefined,
-    renotify: !!d.when,
+    tag: d.tag ?? (d.when ? `when-${d.when}` : undefined),
+    renotify: !!(d.when || d.tag),
     data: d,
-    actions: d.when ? [{ action: "done", title: "Done" }] : [],
+    actions: d.when && d.kind === "tick" ? [{ action: "done", title: "Done" }] : [],
   };
   e.waitUntil(self.registration.showNotification(title, options));
 });
@@ -50,7 +50,7 @@ self.addEventListener("push", (e) => {
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const d = e.notification.data ?? {};
-  const page = `./today.html${d.when ? `?when=${encodeURIComponent(d.when)}` : ""}`;
+  const page = d.url ? String(d.url) : `./today.html${d.when ? `?when=${encodeURIComponent(d.when)}` : ""}`;
   if (e.action === "done" && d.when) {
     e.waitUntil(recordDone(d).then(async (ok) => {
       if (ok) { for (const c of await self.clients.matchAll({ type: "window" })) c.postMessage({ recorded: d.when }); return; }

@@ -21,7 +21,7 @@ HEAD = """<!doctype html>
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=20261026a">
+  <link rel="stylesheet" href="./styles.css?v=20261026b">
 </head>
 <body data-page="{page}">
   <header class="top">
@@ -47,7 +47,7 @@ HEAD = """<!doctype html>
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261026a"></script>
+  <script src="./app.js?v=20261026b"></script>
 </body>
 </html>
 """
@@ -57,6 +57,11 @@ PAGES = {
     <p class="lead"><span id="today-date"></span>.  The routine as it stands, in clock order.  Tap done when a step is done; that is the fact, and the Watch reads met from it.</p>
     <div id="routines"></div>
     <p id="today-empty" class="empty" hidden>No routine on your side of the record yet.  A routine is a bundle of whens, asserted with your yes.</p>
+    <form id="day-note" class="note-form" autocomplete="off">
+      <label for="day-note-words" class="hint">A note about the day: a slip, a change you want, anything.  If it changes a step, a question comes back for your yes.</label>
+      <textarea id="day-note-words" rows="2" placeholder="In your words…"></textarea>
+      <div class="row"><button type="submit" class="small">Note</button></div>
+    </form>
     <p id="notify-hint" class="hint small" hidden>Notifications are off on this phone.  Turn them on in Settings and each step reaches you at its minute.</p>
 """),
     "index.html": dict(page="record", title="when fire", heading="Record", main="""

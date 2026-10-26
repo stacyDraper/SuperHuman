@@ -162,6 +162,16 @@ const pages = {};
 pages.today = async function () {
   const box = $("routines"), empty = $("today-empty"), hint = $("notify-hint");
   if ("Notification" in window && Notification.permission !== "granted") hint.hidden = false;
+  $("day-note").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const ta = $("day-note-words"), words = ta.value.trim(); if (!words) { ta.focus(); return; }
+    const args = { said: words, shape: { via: "when_fire_web", note: "day" } };
+    try { await call("record", args); ta.value = ""; status("Noted.  If it changes a step, a question comes back for your yes.", "ok", 6000); }
+    catch (err) {
+      if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
+      else { pending.add({ args }); ta.value = ""; status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000); }
+    }
+  });
   await render();
   async function render() {
     try {
@@ -194,10 +204,26 @@ pages.today = async function () {
         else { pending.add({ args }); status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000); btn.disabled = false; }
       }
     });
+    const noteBtn = el("button", { class: "small ghost note", type: "button" }, "note");
+    const noteBox = el("textarea", { rows: 2, placeholder: "In your words: a slip, a change, anything…" });
+    const noteSend = el("button", { class: "small", type: "button" }, "Note");
+    const noteForm = el("div", { class: "step-note", hidden: true }, noteBox, el("div", { class: "row" }, noteSend));
+    noteBtn.addEventListener("click", () => { noteForm.hidden = !noteForm.hidden; if (!noteForm.hidden) noteBox.focus(); });
+    noteSend.addEventListener("click", async () => {
+      const words = noteBox.value.trim(); if (!words) { noteBox.focus(); return; }
+      noteSend.disabled = true;
+      const args = { said: words, about: w.id, shape: { via: "when_fire_web", note: "step", routine: w.routine_name ?? null } };
+      try { await call("record", args); noteBox.value = ""; noteForm.hidden = true; status("Noted.  If it changes the step, a question comes back for your yes.", "ok", 6000); }
+      catch (err) {
+        if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
+        else { pending.add({ args }); noteBox.value = ""; noteForm.hidden = true; status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000); }
+      } finally { noteSend.disabled = false; }
+    });
     return el("article", { class: `step${done ? " done" : ""}${w.falls_today ? "" : " off-day"}`, "data-when": w.id },
       el("span", { class: "clock" }, w.at ?? "—"),
       el("div", {}, el("p", { class: "words" }, w.words), state),
-      btn,
+      el("div", { class: "acts" }, btn, noteBtn),
+      noteForm,
     );
   }
 };
@@ -429,7 +455,13 @@ pages.questions = async function () {
           try { await call("answer", { question: q.id, words }); status("Answered; it is on the record.", "ok"); await render(true); }
           catch (e) { status(`Not answered: ${e.message}`, "warn", 6000); btn.disabled = false; }
         });
-        return el("article", { class: "question" }, el("p", { class: "words" }, q.words), el("p", { class: "meta" }, `asked ${fmtStamp(q.asked_at)} by ${q.asked_by}`), box, btn);
+        const yes = q.shape?.proposal ? el("button", { class: "primary small", type: "button" }, "Yes, put it on") : null;
+        if (yes) yes.addEventListener("click", async () => {
+          yes.disabled = true; btn.disabled = true;
+          try { const r = await call("answer", { question: q.id, words: "yes" }); status(r?.when ? "On your side, in place of the old wording." : "Answered; it is on the record.", "ok", 6000); await render(true); }
+          catch (e) { status(`Not answered: ${e.message}`, "warn", 6000); yes.disabled = false; btn.disabled = false; }
+        });
+        return el("article", { class: `question${q.shape?.proposal ? " proposal" : ""}` }, el("p", { class: "words" }, q.words), el("p", { class: "meta" }, `asked ${fmtStamp(q.asked_at)} by ${q.asked_by}`), box, el("div", { class: "row" }, yes, btn));
       }));
       $("asked-empty").hidden = mine.length > 0;
       $("looking").replaceChildren(...theirs.map((q) => el("article", { class: "question quiet" }, el("p", { class: "words" }, q.words), el("p", { class: "meta" }, `the Thinker is asking the ${q.ask_of} · since ${fmtStamp(q.asked_at)}`))));
