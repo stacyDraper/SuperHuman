@@ -178,7 +178,7 @@ pages.today = async function () {
       const t = await call("today");
       const whens = t.whens ?? [];
       const byRoutine = new Map();
-      for (const w of whens) { const k = w.bundle ?? w.id; if (!byRoutine.has(k)) byRoutine.set(k, { name: w.routine, steps: [] }); byRoutine.get(k).steps.push(w); }
+      for (const w of whens) { const k = w.bundle ?? w.id; if (!byRoutine.has(k)) byRoutine.set(k, { name: w.routine_name ?? w.routine, steps: [] }); byRoutine.get(k).steps.push(w); }
       box.replaceChildren(...[...byRoutine.values()].map((r) => el("section", { class: "routine" },
         byRoutine.size > 1 || r.name ? el("h2", {}, r.name ?? "the routine") : null,
         r.steps.map((w) => step(w)),
