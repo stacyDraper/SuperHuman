@@ -173,9 +173,11 @@ pages.today = async function () {
     }
   });
   await render();
+  let day = null;
   async function render() {
     try {
       const t = await call("today");
+      day = t.day ?? null;
       const whens = t.whens ?? [];
       const byRoutine = new Map();
       for (const w of whens) { const k = w.bundle ?? w.id; if (!byRoutine.has(k)) byRoutine.set(k, { name: w.routine_name ?? w.routine, steps: [] }); byRoutine.get(k).steps.push(w); }
@@ -197,8 +199,14 @@ pages.today = async function () {
     const btn = el("button", { class: `small${done ? " ghost" : " primary"}`, type: "button" }, done ? "Again" : "Done");
     btn.addEventListener("click", async () => {
       btn.disabled = true;
-      const args = { said: w.words, about: w.id, shape: { via: "when_fire_web", done: true, routine: w.routine_name ?? null } };
-      try { await call("record", args); status(`Recorded, ${fmtTime(new Date().toISOString())}.`, "ok"); await render(); }
+      // Done means it was done according to plan (Stacy, October 27, 2026: "done means it was done according to plan or
+      // assertion").  A first Done after the step's clock is recorded at the planned time; a Done before it, or Again,
+      // at the tap.
+      const planned = !done && w.at && day ? new Date(`${day}T${w.at}:00`) : null;
+      const asPlanned = !!planned && planned.getTime() < Date.now();
+      const args = { said: w.words, about: w.id, shape: { via: "when_fire_web", done: true, routine: w.routine_name ?? null, ...(asPlanned ? { as_planned: true } : {}) } };
+      if (asPlanned) args.happened_at = planned.toISOString();
+      try { await call("record", args); status(asPlanned ? `Recorded, as planned at ${fmtTime(planned.toISOString())}.` : `Recorded, ${fmtTime(new Date().toISOString())}.`, "ok"); await render(); }
       catch (err) {
         if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
         else { pending.add({ args }); status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000); btn.disabled = false; }

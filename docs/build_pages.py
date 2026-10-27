@@ -21,7 +21,7 @@ HEAD = """<!doctype html>
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=20261026b">
+  <link rel="stylesheet" href="./styles.css?v=20261027a">
 </head>
 <body data-page="{page}">
   <header class="top">
@@ -47,7 +47,7 @@ HEAD = """<!doctype html>
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261026b"></script>
+  <script src="./app.js?v=20261027a"></script>
 </body>
 </html>
 """

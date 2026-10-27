@@ -3,7 +3,7 @@
 // Receives the routine's pushes from the notify handler and shows each step as a notification.  Done on the
 // notification records the fact straight from here, through the door's address the page keeps in the key cache;
 // a plain tap opens the Today page on that step.
-const SHELL = "when-fire-shell-v6";
+const SHELL = "when-fire-shell-v7";
 const ASSETS = ["./", "./index.html", "./today.html", "./whens.html", "./thoughts.html", "./questions.html", "./settings.html", "./app.js", "./styles.css", "./icon-512.png", "./manifest.webmanifest"];
 const SCOPE = self.registration.scope;
 const KEY_CACHE = "when-fire-key";
@@ -67,8 +67,12 @@ async function recordDone(d) {
     const r = await c.match("./key");
     if (!r) return false;
     const address = await r.text();
+    // Done means it was done according to plan: after the step's minute, the planned time; before it, the tap.
+    const planned = d.planned_at ? new Date(d.planned_at) : null;
+    const asPlanned = !!planned && !isNaN(planned.getTime()) && planned.getTime() < Date.now();
     const body = { jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name: "record", arguments: {
-      said: d.body, about: d.when, shape: { via: "when_fire_web", done: true, fire: d.fire ?? null, from: "notification" } } } };
+      said: d.body, about: d.when, ...(asPlanned ? { happened_at: planned.toISOString() } : {}),
+      shape: { via: "when_fire_web", done: true, fire: d.fire ?? null, from: "notification", ...(asPlanned ? { as_planned: true } : {}) } } } };
     const res = await fetch(address, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!res.ok) return false;
     const j = await res.json();
