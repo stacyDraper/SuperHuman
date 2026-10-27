@@ -161,6 +161,7 @@ const pages = {};
 // is hard coded: a routine is a bundle of whens on the person's side, marked routine in its shape.
 pages.today = async function () {
   const box = $("routines"), empty = $("today-empty"), hint = $("notify-hint");
+  let day = null;   // the record's local day, from the today verb; the planned time of a step is built on it
   if ("Notification" in window && Notification.permission !== "granted") hint.hidden = false;
   $("day-note").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -173,7 +174,6 @@ pages.today = async function () {
     }
   });
   await render();
-  let day = null;
   async function render() {
     try {
       const t = await call("today");

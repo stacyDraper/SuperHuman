@@ -47,7 +47,7 @@ HEAD = """<!doctype html>
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261027a"></script>
+  <script src="./app.js?v=20261027b"></script>
 </body>
 </html>
 """
