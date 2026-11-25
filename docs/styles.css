@@ -190,7 +190,7 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .sheet-row:active { background: var(--bg-3); }
 .sheet-row input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .attached { display: flex; align-items: center; gap: 10px; }
-.attached-name { color: var(--ink-2); font-size: 0.9rem; }
+.attached-name { color: var(--ink-2); font-size: 0.9rem; min-width: 0; overflow-wrap: anywhere; }
 
 /* paging */
 .more { display: block; margin: 14px auto 0; }

@@ -2,6 +2,12 @@
 // Several pages, one navigation (a bar at the top of every page), one door: every page talks to the connector with the same verbs any AI uses.
 // The key rides on the page's address once (?token=...), then lives in this browser's storage.
 // Pages: today, record (index), whens, thoughts, questions, settings.  The body's data-page says which one this is.
+//
+// Tuesday, November 24, 2026: a file goes in whole.  Until then the Record page redrew every picture on the phone
+// (long side 1600, JPEG) and the redrawing was what the record kept.  Now a picture, a recording or a document
+// travels as the file it is, up to sixteen megabytes; a larger one is told so plainly and stays where it is.  A whole
+// file does not fit in the browser's small storage, so an entry with a file is kept in the browser's database until
+// the record has it.  The page calls nothing recorded, or kept, that is not.
 
 "use strict";
 
@@ -11,7 +17,7 @@
 const BASE = "https://xmdrzegrkjdeibvxihih.supabase.co/functions/v1/";
 const store = {
   get: (k, d = null) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } },
-  set: (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* storage may be shut */ } },
+  set: (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); return true; } catch { return false; /* storage is shut or full */ } },
 };
 const params = new URLSearchParams(location.search);
 if (params.get("token")) { store.set("wf_token", params.get("token")); }
@@ -32,6 +38,9 @@ async function call(name, args = {}) {
     body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name, arguments: args } }),
   });
   if (r.status === 401) throw new Error("refused");
+  // Only a plain answer is an answer.  A worker that stopped, or a gateway that timed out, sends words of its own
+  // under another status; read as an answer, those words looked like a yes and the page said Recorded.
+  if (!r.ok) { let words = ""; try { words = (await r.text()).replace(/\s+/g, " ").trim().slice(0, 160); } catch { /* no words came */ } throw new Error(`the door answered ${r.status}${words ? `: ${words}` : ""}`); }
   const j = await r.json();
   if (j?.error) throw new Error(j.error.message);
   const text = j?.result?.content?.[0]?.text ?? "";
@@ -99,8 +108,11 @@ function status(text, kind = "", ms = 3600) {
 }
 function needKey(err) {
   const form = $("key-form"); if (!form) return false;
-  const refused = /refused|no key/.test(String(err?.message ?? err));
-  if (refused) { if (/refused/.test(String(err?.message))) store.set("wf_token", null); form.hidden = false; $("main")?.classList.add("locked"); }
+  // Exactly the door's refusal of the key, or no key at all.  Other words that happen to hold "refused" (a worker's,
+  // a gateway's) are not it, and must not make the phone forget its key.
+  const said = String(err?.message ?? err);
+  const refused = said === "refused" || said === "no key";
+  if (refused) { if (said === "refused") store.set("wf_token", null); form.hidden = false; $("main")?.classList.add("locked"); }
   return refused;
 }
 function keyForm() {
@@ -127,19 +139,160 @@ async function readRecord(opts = {}, fresh = false) {
   return data;
 }
 
-// Things the person wrote that did not reach the record yet (no network, a refused key): kept and retried.
-const PENDING = "wf_pending";
-const pending = {
-  list: () => { try { return JSON.parse(store.get(PENDING, "[]")); } catch { return []; } },
-  save: (l) => store.set(PENDING, JSON.stringify(l)),
-  add(item) { const l = this.list(); l.push({ ...item, queued_at: new Date().toISOString() }); this.save(l); },
-  async flush() {
-    const l = this.list(); if (!l.length) return 0;
-    const left = []; let sent = 0;
-    for (const it of l) {
-      try { await call("record", it.args); sent++; } catch (e) { if (needKey(e)) { left.push(it); break; } left.push(it); }
+// Things the person wrote that did not reach the record yet (no connection, a door that did not answer, a phone that
+// slept in the middle of a send): kept on this phone and sent again.  Words alone are kept in the browser's small
+// storage, as before.  A whole file does not fit there, so an entry with a file is kept in the browser's database,
+// which holds a file whole.  An entry from the Record form is kept before it travels and let go once the record has
+// it, so a send cut short loses nothing; and it carries its own id, so one entry is one fact however often it is sent.
+const PENDING = "wf_pending", MARKS = "wf_marks";
+const FRESH = 30000;    // a send that was on its way under half a minute ago may still be landing; the page does not send it again on its own before then
+const KEPT = "Kept on this phone; it goes to the record when the connection is back.";
+const why = (err) => (err instanceof TypeError ? "no connection" : String(err?.message ?? err).slice(0, 140));
+const plural = (n, word) => `${n} ${word}${String(n) === "1" ? "" : "s"}`;
+const megabytes = (n) => (n >= 1e6 ? plural((n / 1e6).toFixed(1).replace(/\.0$/, ""), "megabyte") : plural(Math.max(1, Math.round(n / 1000)), "kilobyte"));
+const entryId = () => (globalThis.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+
+// The browser's database, one store: the entries that carry a file.  A promise from here settles when its
+// transaction has, so a write that resolves is on the phone.
+const jar = {
+  ready: null,
+  open() {
+    if (!this.ready) {
+      this.ready = new Promise((ok, no) => {
+        const req = indexedDB.open("when-fire", 1);
+        req.onupgradeneeded = () => { req.result.createObjectStore("pending", { keyPath: "id", autoIncrement: true }); };
+        req.onsuccess = () => ok(req.result);
+        req.onerror = () => no(req.error ?? new Error("the browser's database did not open"));
+        req.onblocked = () => no(new Error("the browser's database is busy"));
+      });
     }
-    this.save(left); return sent;
+    return this.ready;
+  },
+  async work(mode, fn, again = true) {
+    try {
+      const db = await this.open();
+      return await new Promise((ok, no) => {
+        const t = db.transaction("pending", mode);
+        const req = fn(t.objectStore("pending"));
+        t.oncomplete = () => ok(req.result);
+        t.onerror = t.onabort = () => no(t.error ?? req.error ?? new Error("the browser's database refused"));
+      });
+    } catch (e) {
+      // A phone that has been asleep may have let the database go.  It is opened afresh, once.  Nothing was written
+      // by the try that stumbled: a transaction that did not complete wrote nothing.
+      const was = this.ready; this.ready = null;
+      if (was) was.then((db) => { try { db.close(); } catch { /* already gone */ } }, () => {});
+      if (!again) throw e;
+      return await this.work(mode, fn, false);
+    }
+  },
+  add(entry) { return this.work("readwrite", (s) => s.add(entry)); },
+  all() { return this.work("readonly", (s) => s.getAll()); },
+  drop(id) { return this.work("readwrite", (s) => s.delete(id)); },
+};
+
+// Small notes about kept entries, by key: when a send of it was last known to be on its way, and how often the door
+// has refused it.
+const marks = {
+  all: () => { try { const m = JSON.parse(store.get(MARKS, "{}")); return m && typeof m === "object" && !Array.isArray(m) ? m : {}; } catch { return {}; } },
+  set(key, patch) { const m = this.all(); m[key] = { ...(m[key] ?? {}), ...patch }; store.set(MARKS, JSON.stringify(m)); },
+  drop(key) { const m = this.all(); if (key in m) { delete m[key]; store.set(MARKS, JSON.stringify(m)); } },
+  keep(keys) { const m = this.all(), k = new Set(keys); let changed = false; for (const x of Object.keys(m)) if (!k.has(x)) { delete m[x]; changed = true; } if (changed) store.set(MARKS, JSON.stringify(m)); },
+};
+
+const pending = {
+  busy: false, wait: 0, inFlight: new Set(),
+  words: () => { try { const l = JSON.parse(store.get(PENDING, "[]")); return Array.isArray(l) ? l : []; } catch { return []; } },
+  // Everything kept, oldest first: the words in the small storage and the entries with a file in the database.
+  async list() {
+    const m = marks.all();
+    const small = this.words().map((it) => ({ ...it, where: "storage", key: `s:${it.queued_at}` }));
+    let whole = [], partial = false;
+    try { whole = (await jar.all()).map((it) => ({ ...it, where: "database", key: `d:${it.id}` })); } catch { partial = true; /* the database could not be read just now */ }
+    const l = [...small, ...whole].map((it) => ({ ...it, ...(m[it.key] ?? {}) })).sort((a, b) => (String(a.queued_at) < String(b.queued_at) ? -1 : 1));
+    l.partial = partial;
+    return l;
+  },
+  // Keeps an entry and says where, or null when this phone could not keep it.  It is kept with the time it was
+  // written, so an entry that goes later still says when it happened.  sending: a send of it begins now.
+  async add(item, sending = false) {
+    const queued_at = new Date().toISOString();
+    const entry = { ...item, args: { ...item.args, happened_at: item.args?.happened_at ?? queued_at }, queued_at };
+    let h = null;
+    if (!entry.args.attachment) {
+      const l = this.words(); l.push(entry);
+      if (store.set(PENDING, JSON.stringify(l))) h = { where: "storage", key: `s:${queued_at}`, queued_at };
+    }
+    if (!h) { try { const id = await jar.add(entry); h = { where: "database", key: `d:${id}`, id }; } catch { return null; } }
+    if (sending) this.inFlight.add(h.key);
+    return h;
+  },
+  // While a send is on its way its mark is kept fresh, so another opening of the page leaves the entry alone.
+  beat(key) { const tick = () => marks.set(key, { alive: Date.now() }); tick(); return setInterval(tick, 10000); },
+  // The record has it: the entry leaves the phone.
+  async remove(h) {
+    this.inFlight.delete(h.key); marks.drop(h.key);
+    if (h.where === "database") await jar.drop(h.id).catch(() => {});
+    else store.set(PENDING, JSON.stringify(this.words().filter((x) => x.queued_at !== h.queued_at)));
+  },
+  // A send of it ended without the record's receipt: it stays kept.  With no answer at all it may still be landing,
+  // so its mark stays fresh a little longer.  A refusal the door answered did not land; it is counted.
+  stays(h, err) {
+    this.inFlight.delete(h.key);
+    const said = String(err?.message ?? err);
+    if (said === "refused" || said === "no key") marks.set(h.key, { alive: 0 });
+    else if (err instanceof TypeError) marks.set(h.key, { alive: Date.now() });
+    else marks.set(h.key, { alive: 0, tries: ((marks.all()[h.key] ?? {}).tries ?? 0) + 1, refused: why(err) });
+  },
+  // Sends what is kept, oldest first.  byHand is the Send now button: it also tries what the page holds back on its
+  // own, which is an entry whose last send was on its way under half a minute ago (it may still be landing) and an
+  // entry with a file that the door has refused three times (a whole file is a long upload to repeat at every opening).
+  async flush(byHand = false) {
+    if (this.busy) return 0;
+    this.busy = true; this.wait = 0;
+    let sent = 0;
+    try {
+      const all = await this.list();
+      if (!all.partial) marks.keep([...all.map((it) => it.key), ...this.inFlight]);
+      const now = Date.now();
+      const due = all.filter((it) => {
+        if (this.inFlight.has(it.key)) return false;
+        if (byHand) return true;
+        if (it.where === "database" && (it.tries ?? 0) >= 3) return false;
+        const left = FRESH - (now - (it.alive ?? 0));
+        if (left > 0) { this.wait = Math.max(this.wait, left); return false; }
+        return true;
+      });
+      if (!due.length) return 0;
+      // An entry may have reached the record after all: the file went up and the answer never came back.  The record
+      // is asked once which of these it already holds, by each entry's own id in the fact's pocket.  If the record
+      // does not answer, nothing is sent blind.
+      let held = new Set();
+      const mine = due.filter((it) => it.args?.shape?.entry);
+      if (mine.length) {
+        const since = new Date(Math.min(...mine.map((it) => new Date(it.queued_at).getTime())) - 3600 * 1000).toISOString();
+        try { const rec = await call("read", { since, limit: "all", notes: false, fires: false }); held = new Set((rec?.facts ?? []).map((f) => f.shape?.entry).filter(Boolean)); }
+        catch (e) { needKey(e); return 0; }
+      }
+      for (const it of due) {
+        const id = it.args?.shape?.entry;
+        let pulse = null;
+        try {
+          if (!id || !held.has(id)) {
+            pulse = this.beat(it.key);
+            const out = await call("record", it.args);
+            if (!out?.fact) throw new Error("the record gave no receipt");
+            if (id) held.add(id);
+          }
+          sent++;
+          await this.remove(it);
+        } catch (e) {
+          this.stays(it, e);
+          if (needKey(e)) break;
+        } finally { clearInterval(pulse); }
+      }
+    } finally { this.busy = false; }
+    return sent;
   },
 };
 
@@ -239,7 +392,10 @@ pages.today = async function () {
 // Record: what happened, in the person's words, with the time it happened first.  The recent log below, paged.
 pages.record = async function () {
   const form = $("record-form"), said = $("said"), when = $("happened"), sheet = $("attach-sheet"), plus = $("plus");
-  let timeTouched = false, attachment = null;
+  let timeTouched = false, attachment = null, thumbUrl = null, picking = 0, reads = 0, holds = 0, timer = null;
+  const READING = "Reading the file…";
+  // Record waits while a file is still being read and while a send is on its way.
+  const hold = (on) => { holds += on ? 1 : -1; $("record-btn").disabled = holds > 0; };
   let windowDays = 2, shown = 20;
   const worldFacts = (rec) => rec.facts.filter((f) => !isNote(f) && f.kind === "world").sort((a, b) => (a.happened_at < b.happened_at ? 1 : -1));
   const setNow = () => { when.value = inputValue(); timeTouched = false; when.classList.remove("touched"); };
@@ -254,57 +410,107 @@ pages.record = async function () {
   document.addEventListener("click", (e) => { if (!sheet.hidden && !sheet.contains(e.target) && e.target !== plus) openSheet(false); });
   for (const id of ["pick-camera", "pick-photos", "pick-files"]) {
     $(id).addEventListener("change", async (e) => {
-      const f = e.target.files?.[0]; openSheet(false);
+      const input = e.target, f = input.files?.[0]; openSheet(false);
       if (!f) return;
-      attachment = await pack(f);
-      showAttachment(f);
-      if (!timeTouched && f.lastModified && Date.now() - f.lastModified > 5 * 60000) { when.value = inputValue(new Date(f.lastModified)); timeTouched = true; when.classList.add("touched"); }
-      e.target.value = "";
+      // A file the page cannot carry is told so, never dropped in silence.
+      const turn = ++picking;
+      hold(true); reads++; status(READING, "", 0);
+      try {
+        const packed = await pack(f);
+        if (turn !== picking) return;
+        attachment = packed; showAttachment(f);
+        if (!timeTouched && f.lastModified && Date.now() - f.lastModified > 5 * 60000) { when.value = inputValue(new Date(f.lastModified)); timeTouched = true; when.classList.add("touched"); }
+      } catch (err) {
+        if (turn === picking) status(String(err?.message ?? err), "warn", 0);
+      } finally {
+        hold(false); input.value = "";
+        if (--reads === 0 && $("status").textContent === READING) $("status").hidden = true;
+      }
     });
   }
-  $("clear-attachment").addEventListener("click", () => { attachment = null; $("attached").hidden = true; $("thumb").hidden = true; });
+  $("clear-attachment").addEventListener("click", dropAttachment);
+  // The picture shown is the file itself, drawn by the browser; nothing is redrawn or re-encoded.
   function showAttachment(f) {
     const img = $("thumb");
-    if (attachment.media_type.startsWith("image/")) { img.src = `data:${attachment.media_type};base64,${attachment.base64}`; img.hidden = false; } else img.hidden = true;
-    $("attached-name").textContent = attachment.media_type.startsWith("image/") ? "" : `${f.name} (${Math.round(f.size / 1024)} kB)`;
+    if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+    thumbUrl = null;
+    if (attachment.media_type.startsWith("image/")) {
+      thumbUrl = URL.createObjectURL(f);
+      img.onerror = () => { img.hidden = true; };   // a kind of picture this browser cannot draw is attached all the same, whole
+      img.src = thumbUrl; img.hidden = false;
+    } else { img.hidden = true; img.removeAttribute("src"); }
+    $("attached-name").textContent = `${f.name || "file"} · ${megabytes(f.size)} · whole`;
     $("attached").hidden = false;
+  }
+  function dropAttachment() {
+    attachment = null; picking++;
+    if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+    thumbUrl = null;
+    const img = $("thumb"); img.hidden = true; img.removeAttribute("src");
+    $("attached").hidden = true;
   }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const words = said.value.trim();
     if (!words && !attachment) { said.focus(); return; }
-    const args = { said: words || (attachment?.media_type.startsWith("image/") ? "(picture)" : `(${attachment?.title ?? "file"})`), shape: { via: "when_fire_web" } };
+    // entry: this entry's own id, in the fact's pocket.  One entry is one fact, however often it has to be sent.
+    const args = { said: words || (attachment?.media_type.startsWith("image/") ? "(picture)" : `(${attachment?.title ?? "file"})`), shape: { via: "when_fire_web", entry: entryId() } };
     if (timeTouched && when.value) args.happened_at = new Date(when.value).toISOString();
     if (attachment) args.attachment = attachment;
-    const btn = $("record-btn"); btn.disabled = true; btn.textContent = "Recording…";
+    const btn = $("record-btn"); hold(true); plus.disabled = true; btn.textContent = attachment ? "Sending the file…" : "Recording…";
+    const clear = () => { said.value = ""; said.style.height = ""; dropAttachment(); setNow(); };
+    let kept = null, recorded = false, pulse = null;
     try {
-      await call("record", args);
+      kept = await pending.add({ args }, true);   // on the phone before it travels: a send cut short loses nothing
+      if (kept) pulse = pending.beat(kept.key);
+      const out = await call("record", args);
+      if (!out?.fact) throw new Error("the record gave no receipt");
+      recorded = true;
+      if (kept) await pending.remove(kept);
       status(args.happened_at ? `Recorded, as of ${fmtStamp(args.happened_at)}.` : "Recorded.", "ok");
-      said.value = ""; said.style.height = ""; attachment = null; $("attached").hidden = true; setNow();
+      clear();
       await renderLog(true);
     } catch (err) {
-      if (needKey(err)) { status("The key was refused.  Paste the address again.", "warn", 0); }
-      else {
-        pending.add({ args });
-        status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000);
-        said.value = ""; said.style.height = ""; attachment = null; $("attached").hidden = true; setNow();
+      const key = needKey(err);
+      if (recorded) { /* the fact is on the record; what stumbled came after it */ }
+      else if (kept) {
+        pending.stays(kept, err);
+        status(key ? "The key was refused.  Paste the address again; this entry is kept on this phone and goes then." : `Not sent (${why(err)}).  ${KEPT}`, "warn", key ? 0 : 8000);
+        clear();
         renderPending();
-      }
-    } finally { btn.disabled = false; btn.textContent = "Record"; }
+        if (err instanceof TypeError) later(FRESH);   // no answer at all: once it can no longer be landing, the page tries again by itself
+      } else if (key) { status("The key was refused.  Paste the address again.", "warn", 0); }
+      else { status(`Not sent (${why(err)}), and this phone could not keep it.  Your words${attachment ? " and the file" : ""} are still here: tap Record again when the connection is back.`, "warn", 0); }
+    } finally { clearInterval(pulse); hold(false); plus.disabled = false; btn.textContent = "Record"; }
   });
 
-  $("retry").addEventListener("click", async () => { const n = await pending.flush(); status(n ? `${n} sent.` : "Still waiting.", n ? "ok" : "warn"); renderPending(); if (n) renderLog(true); });
+  // What is kept goes when the page opens, when the connection or the page comes back, and by hand.
+  function later(ms) { if (!timer) timer = setTimeout(() => { timer = null; sendKept(false); }, ms + 1000); }
+  async function sendKept(byHand) {
+    if (pending.busy) { if (byHand) status("Sending what is kept…", "", 4000); return; }
+    const n = await pending.flush(byHand).catch(() => 0);
+    if (byHand) status(n ? `${n} sent.` : "Still waiting.", n ? "ok" : "warn");
+    else if (n) status(`${n} kept entr${n === 1 ? "y" : "ies"} sent.`, "ok");
+    renderPending(); if (n) renderLog(true);
+    // What was held back because its last send may still be landing is tried again once that time has passed.
+    if (pending.wait) later(pending.wait);
+  }
+  $("retry").addEventListener("click", () => sendKept(true));
+  window.addEventListener("online", () => sendKept(false));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) sendKept(false); });
   $("log-more").addEventListener("click", async () => { shown += 20; await renderLog(false, true); });
   renderPending();
-  const flushed = await pending.flush().catch(() => 0);
-  if (flushed) { status(`${flushed} kept entr${flushed === 1 ? "y" : "ies"} sent.`, "ok"); renderPending(); }
   await renderLog();
+  sendKept(false);
 
-  function renderPending() {
-    const l = pending.list(); const box = $("pending");
-    box.hidden = l.length === 0;
-    $("pending-list").replaceChildren(...l.map((it) => el("li", {}, el("span", { class: "words" }, it.args.said), el("span", { class: "meta" }, `written ${relative(it.queued_at)}`))));
+  async function renderPending() {
+    try {
+      const l = (await pending.list()).filter((it) => !pending.inFlight.has(it.key)); const box = $("pending");
+      box.hidden = l.length === 0;
+      $("pending-list").replaceChildren(...l.map((it) => el("li", {}, el("span", { class: "words" }, it.args.said), el("span", { class: "meta" },
+        `written ${relative(it.queued_at)}${it.args.attachment ? `, with ${it.args.attachment.title || "a file"}` : ""}${it.where === "database" && (it.tries ?? 0) >= 3 ? `.  The door refused it ${it.tries} times (${it.refused}); Send now tries again.` : ""}`))));
+    } catch { /* the list is a courtesy; the entries are kept either way */ }
   }
   // The log shows the newest facts first, twenty at a time; Earlier shows twenty more, widening the window as needed.
   async function renderLog(fresh = false, more = false) {
@@ -344,21 +550,27 @@ pages.record = async function () {
   }
 };
 
-// An attachment travels as base64: a picture is shrunk on the phone first (long side 1600, JPEG); anything else as it is, up to 8 MB.
+// An attachment travels as base64 and whole: the file as it is, under its own name.  It is never shrunk, cropped or
+// re-encoded to fit.  (Until November 24, 2026 a picture was redrawn here at 1600 on its long side, as a JPEG, and the
+// redrawing was what the record kept.)  The road has carried a file of twenty-five megabytes and given it back byte
+// for byte; this page takes up to sixteen.  A larger original stays where it is: it goes in Drive whole, and the
+// record points at it there.
+const WHOLE_MAX = 16000000;
+// What kind of file it is, by the ending of its name, when the browser does not say.
+const KINDS = {
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", heic: "image/heic", heif: "image/heif", tif: "image/tiff", tiff: "image/tiff",
+  m4a: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav", mp4: "video/mp4", mov: "video/quicktime",
+  pdf: "application/pdf", txt: "text/plain", csv: "text/csv", md: "text/markdown", json: "application/json", zip: "application/zip",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+};
 async function pack(file) {
-  if (file.type.startsWith("image/")) return await shrink(file);
-  if (file.size > 8 * 1024 * 1024) throw new Error("that file is over 8 MB");
-  return { base64: await toBase64(file), media_type: file.type || "application/octet-stream", title: file.name };
-}
-// A picture is shrunk on the phone before it travels: long side 1600, JPEG.
-async function shrink(file) {
-  const bitmap = await createImageBitmap(file).catch(() => null);
-  if (!bitmap) { const b64 = await toBase64(file); return { base64: b64, media_type: file.type || "image/jpeg", title: file.name }; }
-  const max = 1600, scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
-  const c = document.createElement("canvas"); c.width = Math.round(bitmap.width * scale); c.height = Math.round(bitmap.height * scale);
-  c.getContext("2d").drawImage(bitmap, 0, 0, c.width, c.height);
-  const url = c.toDataURL("image/jpeg", 0.85);
-  return { base64: url.split(",")[1], media_type: "image/jpeg", title: file.name };
+  const name = file.name || "That file";
+  if (file.size > WHOLE_MAX) throw new Error(`${name} is ${megabytes(file.size)}.  This page carries a file whole, up to ${megabytes(WHOLE_MAX)}, and does not shrink one to fit, so it was not attached.  A larger original goes in Drive whole, and the record points at it there.`);
+  if (!file.size) throw new Error(`${name} is empty, so it was not attached.`);
+  const base64 = await toBase64(file);
+  if (!base64) throw new Error(`${name} could not be read, so it was not attached.`);
+  return { base64, media_type: file.type || KINDS[String(file.name).toLowerCase().split(".").pop()] || "application/octet-stream", title: file.name };
 }
 // The push service's public key arrives as url-safe base64; the browser wants bytes.
 function keyBytes(b64) { const s = (b64 + "=".repeat((4 - b64.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/"); const raw = atob(s); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); }
@@ -572,6 +784,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     navigator.serviceWorker.addEventListener("message", (e) => { if (e.data?.recorded && document.body.dataset.page === "today") location.reload(); });
   }
   const page = pages[document.body.dataset.page];
-  if (page && token()) { try { await page(); } catch (err) { if (!needKey(err)) status(err.message, "warn", 8000); } }
+  if (page && token()) {
+    try { await page(); } catch (err) { if (!needKey(err)) status(err.message, "warn", 8000); }
+    // What is kept on this phone goes from any page, not only from Record (which sends its own).
+    if (document.body.dataset.page !== "record") pending.flush().then((n) => { if (n) status(`${n} kept entr${n === 1 ? "y" : "ies"} sent.`, "ok", 6000); }).catch(() => {});
+  }
   else if (page) { keyForm(); }
 });

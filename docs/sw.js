@@ -3,7 +3,7 @@
 // Receives the routine's pushes from the notify handler and shows each step as a notification.  Done on the
 // notification records the fact straight from here, through the door's address the page keeps in the key cache;
 // a plain tap opens the Today page on that step.
-const SHELL = "when-fire-shell-v7";
+const SHELL = "when-fire-shell-v8";
 const ASSETS = ["./", "./index.html", "./today.html", "./whens.html", "./thoughts.html", "./questions.html", "./settings.html", "./app.js", "./styles.css", "./icon-512.png", "./manifest.webmanifest"];
 const SCOPE = self.registration.scope;
 const KEY_CACHE = "when-fire-key";
