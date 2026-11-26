@@ -163,8 +163,20 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .task h3 { margin: 0 0 8px; text-transform: lowercase; }
 .task .page { white-space: pre-wrap; font: inherit; margin: 0 0 8px; overflow-wrap: anywhere; }
 
-/* settings */
+/* settings: each part folds (Stacy, November 26: "The top part of settings is huge ... a lot of scrolling") */
+.fold { border-bottom: 1px solid var(--line); }
+.fold summary { display: flex; align-items: baseline; gap: 10px; cursor: pointer; padding: 14px 0; list-style: none; }
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary h2 { margin: 0; flex: none; }
+.fold summary .gist { color: var(--ink-3); font-size: 0.85rem; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fold summary::after { content: "›"; color: var(--ink-3); font-size: 1.2rem; line-height: 1; transition: transform 0.15s; flex: none; }
+.fold[open] summary::after { transform: rotate(90deg); }
+.fold > :not(summary) { margin-bottom: 14px; }
+.fold .hint:first-of-type { margin-top: 0; }
 .health { margin: 0; display: grid; gap: 6px; }
+.health .errs summary { cursor: pointer; }
+.health .errs ul { margin: 6px 0 0; padding-left: 18px; font-size: 0.85rem; color: var(--ink-2); }
+.health .errs li { margin: 4px 0; overflow-wrap: anywhere; }
 .health .row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .health dt { color: var(--ink-3); font-size: 0.9rem; }
 .health dd { margin: 0; overflow-wrap: anywhere; }

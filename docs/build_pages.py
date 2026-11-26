@@ -21,7 +21,7 @@ HEAD = """<!doctype html>
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=20261126b">
+  <link rel="stylesheet" href="./styles.css?v=20261126c">
 </head>
 <body data-page="{page}">
   <header class="top">
@@ -47,7 +47,7 @@ HEAD = """<!doctype html>
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261126b"></script>
+  <script src="./app.js?v=20261126c"></script>
 </body>
 </html>
 """
@@ -138,41 +138,42 @@ PAGES = {
     </section>
 """),
     "settings.html": dict(page="settings", title="when fire · settings", heading="Settings", main="""
-    <section>
-      <h2>Health</h2>
+    <p class="lead">Each part folds.  Tap a line to open it; the phone remembers which you left open.</p>
+    <details class="fold" data-fold="health">
+      <summary><h2>Health</h2><span id="gist-health" class="gist"></span></summary>
       <dl id="health" class="health"></dl>
-    </section>
-    <section>
-      <h2>Caps</h2>
+    </details>
+    <details class="fold" data-fold="caps">
+      <summary><h2>Caps</h2><span id="gist-caps" class="gist"></span></summary>
       <p class="hint">What each actor may spend in a day, in dollars.  Yours to set, one actor at a time; the default row covers an actor with no row of its own.  An actor that reaches its cap writes a note and stops for the day.</p>
       <div id="caps" class="caps"></div>
-    </section>
-    <section>
-      <h2>Watch closely</h2>
+    </details>
+    <details class="fold" data-fold="turbo">
+      <summary><h2>Watch closely</h2><span id="gist-turbo" class="gist"></span></summary>
       <form id="turbo-form" class="form inline">
         <label class="field"><span>for how many hours</span><input id="turbo-hours" type="number" min="0" max="48" step="1" value="4"></label>
         <button type="submit" class="primary">Turbo</button>
       </form>
       <p class="hint">The Thinker's glance may ask for this on its own for a few hours; otherwise the Watch reads once a day, at the day's close.  Zero turns it off.</p>
-    </section>
-    <section>
-      <h2>Notifications</h2>
+    </details>
+    <details class="fold" data-fold="notify">
+      <summary><h2>Notifications</h2><span id="gist-notify" class="gist"></span></summary>
       <p id="notify-state" class="hint">Checking…</p>
       <div class="row">
         <button id="notify-on" type="button" class="primary small" hidden>Turn on</button>
         <button id="notify-off" type="button" class="ghost small" hidden>Turn off</button>
       </div>
       <p class="hint">The three check-ins (7:00, noon, 8:00 PM) and the week's review reach this phone from the record, not from a timer in the app.  On an iPhone the app must be on the home screen first.</p>
-    </section>
-    <section>
-      <h2>The door</h2>
+    </details>
+    <details class="fold" data-fold="door">
+      <summary><h2>The door</h2><span id="gist-door" class="gist"></span></summary>
       <form id="door-form" class="form">
         <label class="field"><span>function</span><input id="door" type="text" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
         <label class="field"><span>schema (blank for the live record)</span><input id="schema" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder=""></label>
         <button type="submit" class="ghost">Save</button>
       </form>
       <p class="hint">Address: <code id="address"></code><br>Key: <code id="key-masked"></code> · <button id="forget-key" type="button" class="link">forget the key on this phone</button></p>
-    </section>
+    </details>
     <section id="install-hint" hidden>
       <h2>On the home screen</h2>
       <p class="hint">In Safari, tap Share, then “Add to Home Screen”.  The key stays with the app.</p>

@@ -1,5 +1,5 @@
 // when fire, the web client.  Sunday, October 25, 2026; the Today page and notifications, Monday, October 26; the day as
-// one list with three check-ins, one Done and a note box on every step, caps in Settings, last time, and an Undo on every done step, Thursday, November 26.
+// one list with three check-ins, one Done and a note box on every step, caps in Settings, last time, an Undo on every done step, and Settings in folds, Thursday, November 26.
 // Several pages, one navigation (a bar at the top of every page), one door: every page talks to the connector with the same verbs any AI uses.
 // The key rides on the page's address once (?token=...), then lives in this browser's storage.
 // Pages: today, record (index), whens, thoughts, questions, settings.  The body's data-page says which one this is.
@@ -811,8 +811,15 @@ pages.questions = async function () {
   }
 };
 
-// Settings: the key, the door, turbo, the system's health.
+// Settings: the key, the door, turbo, the system's health.  Each part folds (Stacy, November 26: "The top part of
+// settings is huge ... a lot of scrolling"); closed, a part shows its gist on one line, and the phone keeps which
+// parts he left open.
 pages.settings = async function () {
+  for (const d of document.querySelectorAll("details.fold")) {
+    d.open = store.get(`wf_fold_${d.dataset.fold}`) === "1";
+    d.addEventListener("toggle", () => store.set(`wf_fold_${d.dataset.fold}`, d.open ? "1" : null));
+  }
+  const gist = (name, text) => { const g = $(`gist-${name}`); if (g) g.textContent = text; };
   $("door").value = doorName(); $("schema").value = schema();
   $("door-form").addEventListener("submit", (e) => { e.preventDefault(); store.set("wf_door", $("door").value.trim() || "when-fire-mcp"); store.set("wf_schema", $("schema").value.trim() || null); cache = null; status("Saved.", "ok"); renderHealth(); });
   $("forget-key").addEventListener("click", async () => { store.set("wf_token", null); cache = null; await keyCache.drop(); location.reload(); });
@@ -861,6 +868,7 @@ pages.settings = async function () {
       if (sub) { nState.textContent = `On, on this phone.`; nOff.hidden = false; await keyCache.put(); }
       else { nState.textContent = "Off."; nOn.hidden = false; }
     } catch (err) { nState.textContent = `Could not tell: ${err.message}`; }
+    gist("notify", nState.textContent.replace(/\.$/, "").toLowerCase());
   }
   $("turbo-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -891,25 +899,34 @@ pages.settings = async function () {
         ...(c.actors ?? []).map((a) => row(a.actor, a.actor, a.spent_today, a.daily_dollars, a.applies)),
         row("*", "default", null, c.default?.daily_dollars, c.default?.applies),
         el("p", { class: "meta" }, `All actors today: $${Number(c.spent_today ?? 0).toFixed(2)}.`));
+      gist("caps", `$${Number(c.spent_today ?? 0).toFixed(2)} today`);
     } catch (err) { if (!needKey(err)) list.replaceChildren(el("p", { class: "meta" }, `The caps did not answer: ${err.message}`)); }
   }
   $("key-masked").textContent = token() ? `${token().slice(0, 4)}…${token().slice(-4)}` : "none";
   $("address").textContent = `${BASE}${doorName()}`;
+  gist("door", doorName() + (schema() ? ` · ${schema()}` : ""));
   if (!standalone && /iPhone|iPad/.test(navigator.userAgent)) $("install-hint").hidden = false;
   await renderHealth();
+  // Five lines, and the errors as a count with the last one; the list opens on a tap.
   async function renderHealth() {
     try {
       const h = await call("health");
+      const errs = (h.errors_24h ?? []).slice().sort((a, b) => (String(a.at) < String(b.at) ? -1 : 1));
+      const last = errs[errs.length - 1];
+      const heartbeatErrs = Number(h.heartbeat_errors_24h ?? 0);
+      const errLine = el("details", { class: "errs" },
+        el("summary", {}, `${errs.length} actor, ${heartbeatErrs} heartbeat${last ? ` · last ${relative(last.at)}: ${short(String(last.said ?? ""), 80)}` : ""}`),
+        errs.length ? el("ul", {}, ...errs.slice().reverse().map((e) => el("li", {}, `${fmtStamp(e.at)} · ${e.by}: ${e.said ?? JSON.stringify(e)}`))) : el("p", { class: "meta" }, "None."));
       $("health").replaceChildren(...[
-        ["heartbeat last ran", h.heartbeat_last ? `${fmtStamp(h.heartbeat_last)} (${relative(h.heartbeat_last)})` : "never"],
+        ["heartbeat", h.heartbeat_last ? `${relative(h.heartbeat_last)} (${fmtTime(h.heartbeat_last)})` : "never"],
         ["last fact from the world", h.last_world_fact ? fmtStamp(h.last_world_fact) : "none"],
-        ["fires in 24 h", h.fires_24h], ["notes in 24 h", h.notes_24h],
-        ["actor errors in 24 h", (h.errors_24h ?? []).length ? (h.errors_24h ?? []).map((e) => e.said ?? JSON.stringify(e)).join("  ") : 0],
-        ["heartbeat errors in 24 h", h.heartbeat_errors_24h],
+        ["in 24 h", `${h.fires_24h ?? 0} fires · ${h.notes_24h ?? 0} notes`],
         ["spent today", `$${Number(h.spent_today_usd ?? 0).toFixed(2)}`],
-        ["open questions", h.open_questions], ["open tasks", h.open_tasks],
-      ].map(([k, v]) => el("div", { class: "row" }, el("dt", {}, k), el("dd", {}, String(v)))));
-    } catch (err) { if (!needKey(err)) $("health").replaceChildren(el("div", { class: "row" }, el("dt", {}, "health"), el("dd", {}, `did not answer: ${err.message}`))); }
+        ["open", `${h.open_questions ?? 0} questions · ${h.open_tasks ?? 0} tasks`],
+        ["errors in 24 h", errLine],
+      ].map(([k, v]) => el("div", { class: "row" }, el("dt", {}, k), el("dd", {}, v))));
+      gist("health", `heartbeat ${h.heartbeat_last ? relative(h.heartbeat_last) : "never"} · ${errs.length + heartbeatErrs} errors · $${Number(h.spent_today_usd ?? 0).toFixed(2)}`);
+    } catch (err) { if (!needKey(err)) { $("health").replaceChildren(el("div", { class: "row" }, el("dt", {}, "health"), el("dd", {}, `did not answer: ${err.message}`))); gist("health", "did not answer"); } }
   }
 };
 
