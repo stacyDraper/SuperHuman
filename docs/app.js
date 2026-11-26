@@ -476,9 +476,17 @@ pages.today = async function () {
         }
       });
     }
+    // A pack: the step shows its label, and a tap opens a bubble with everything in it, read from the when's pocket
+    // (Stacy, November 26, 3:07 PM: "let me tap it a bubble comes up and I see everything in it").
+    const inside = Array.isArray(w.shape?.items) ? w.shape.items.filter(Boolean).map(String) : [];
+    const words = inside.length
+      ? el("details", { class: "bubble" },
+          el("summary", {}, el("span", { class: "words" }, w.shape?.label ?? w.words), el("span", { class: "count" }, `${inside.length} in it`)),
+          el("ul", {}, ...inside.map((it) => el("li", {}, it))))
+      : el("p", { class: "words" }, w.shape?.label ?? w.words);
     return el("article", { class: `step${done ? " done" : ""}${w.lastNight ? " last-night" : ""}`, "data-when": w.id },
       el("span", { class: "clock" }, w.at ? clock(w.at) : "—"),
-      el("div", { class: "body" }, el("p", { class: "words" }, w.words), state, noteBox),
+      el("div", { class: "body" }, words, state, noteBox),
       el("div", { class: "acts" }, btn, undo),
     );
   }

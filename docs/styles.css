@@ -268,3 +268,11 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 
 /* Undo on a done step: small and quiet, under Again (November 26) */
 .step .acts button.undo { font-size: 0.78rem; opacity: 0.8; }
+/* a pack: the label, and a bubble with everything in it on a tap */
+.step .bubble summary { list-style: none; display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
+.step .bubble summary::-webkit-details-marker { display: none; }
+.step .bubble .count { color: var(--ink-3); font-size: 0.78rem; white-space: nowrap; }
+.step .bubble .count::after { content: " ›"; }
+.step .bubble[open] .count::after { content: " ⌄"; }
+.step .bubble ul { margin: 8px 0 2px; padding: 8px 12px 8px 26px; background: var(--bg-3); border-radius: 10px; font-size: 0.9rem; color: var(--ink-2); }
+.step .bubble li { margin: 2px 0; }
