@@ -4,7 +4,7 @@
 // Today on the stretch since the last one) and the week's review; a step pushed on its own (its pocket says push)
 // still carries Done, which records the fact straight from here through the door's address the page keeps in the
 // key cache.
-const SHELL = "when-fire-shell-v8";
+const SHELL = "when-fire-shell-v9";
 const ASSETS = ["./", "./index.html", "./today.html", "./whens.html", "./thoughts.html", "./questions.html", "./settings.html", "./app.js", "./styles.css", "./icon-512.png", "./manifest.webmanifest"];
 const SCOPE = self.registration.scope;
 const KEY_CACHE = "when-fire-key";

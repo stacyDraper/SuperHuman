@@ -253,3 +253,6 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .caps .cap-row .meta { grid-area: meta; }
 .caps .cap-row input { grid-area: input; width: 100%; box-sizing: border-box; }
 .caps .cap-row button { grid-area: save; }
+
+/* Undo on a done step: small and quiet, under Again (November 26) */
+.step .acts button.undo { font-size: 0.78rem; opacity: 0.8; }

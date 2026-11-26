@@ -1,5 +1,5 @@
 // when fire, the web client.  Sunday, October 25, 2026; the Today page and notifications, Monday, October 26; the day as
-// one list with three check-ins, one Done and a note box on every step, caps in Settings, last time, Thursday, November 26.
+// one list with three check-ins, one Done and a note box on every step, caps in Settings, last time, and an Undo on every done step, Thursday, November 26.
 // Several pages, one navigation (a bar at the top of every page), one door: every page talks to the connector with the same verbs any AI uses.
 // The key rides on the page's address once (?token=...), then lives in this browser's storage.
 // Pages: today, record (index), whens, thoughts, questions, settings.  The body's data-page says which one this is.
@@ -457,10 +457,29 @@ pages.today = async function () {
         else { pending.add({ args }); status(KEPT, "warn", 6000); btn.disabled = false; }
       }
     });
+    // Undo: a Done tapped by mistake (Stacy, November 26, 1:52 PM: "I need an undo button, or an oh shit button").
+    // Nothing is deleted: a new fact corrects the tap and says it was not done; the step stands open again.
+    let undo = null;
+    if (done && last?.id) {
+      undo = el("button", { class: "small ghost undo", type: "button", title: "tapped by mistake" }, "Undo");
+      undo.addEventListener("click", async () => {
+        undo.disabled = true; btn.disabled = true;
+        const args = { said: `Not done: ${w.words}.  Tapped by mistake.`, about: w.id, corrects: last.id, happened_at: last.happened_at,
+          shape: { via: "when_fire_web", undo: true, undoes: last.id, step: w.words, routine: w.routine_name ?? null } };
+        try {
+          await call("record", args);
+          status("Undone.  The tap and the undo both stand on the record; the step is open again.", "ok", 6000);
+          await render();
+        } catch (err) {
+          if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
+          else { pending.add({ args }); status(KEPT, "warn", 6000); undo.disabled = false; btn.disabled = false; }
+        }
+      });
+    }
     return el("article", { class: `step${done ? " done" : ""}${w.lastNight ? " last-night" : ""}`, "data-when": w.id },
       el("span", { class: "clock" }, w.at ? clock(w.at) : "—"),
       el("div", { class: "body" }, el("p", { class: "words" }, w.words), state, noteBox),
-      el("div", { class: "acts" }, btn),
+      el("div", { class: "acts" }, btn, undo),
     );
   }
 
