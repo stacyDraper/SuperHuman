@@ -21,7 +21,7 @@ HEAD = """<!doctype html>
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=20261124a">
+  <link rel="stylesheet" href="./styles.css?v=20261126a">
 </head>
 <body data-page="{page}">
   <header class="top">
@@ -47,22 +47,23 @@ HEAD = """<!doctype html>
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261124a"></script>
+  <script src="./app.js?v=20261126a"></script>
 </body>
 </html>
 """
 
 PAGES = {
     "today.html": dict(page="today", title="when fire · today", heading="Today", main="""
-    <p class="lead"><span id="today-date"></span>.  The routine as it stands, in clock order.  Tap done when a step is done; that is the fact, and the Watch reads met from it.</p>
+    <p class="lead"><span id="today-date"></span>.  What falls today, in clock order, in three stretches.  Under a check-in, one tap records the stretch as planned; a step you didn't do, leave alone.</p>
     <div id="routines"></div>
     <p id="today-empty" class="empty" hidden>No routine on your side of the record yet.  A routine is a bundle of whens, asserted with your yes.</p>
+    <section id="last-time" class="last-time" hidden></section>
     <form id="day-note" class="note-form" autocomplete="off">
       <label for="day-note-words" class="hint">A note about the day: a slip, a change you want, anything.  If it changes a step, a question comes back for your yes.</label>
       <textarea id="day-note-words" rows="2" placeholder="In your words…"></textarea>
       <div class="row"><button type="submit" class="small">Note</button></div>
     </form>
-    <p id="notify-hint" class="hint small" hidden>Notifications are off on this phone.  Turn them on in Settings and each step reaches you at its minute.</p>
+    <p id="notify-hint" class="hint small" hidden>Notifications are off on this phone.  Turn them on in Settings and the three check-ins reach you.</p>
 """),
     "index.html": dict(page="record", title="when fire", heading="Record", main="""
     <section class="record">
@@ -76,14 +77,12 @@ PAGES = {
             <span>Happened</span>
             <input id="happened" type="datetime-local">
           </label>
-          <button id="now" type="button" class="ghost">Now</button>
         </div>
         <div class="row attach-row">
           <button id="plus" type="button" class="ghost plus" aria-haspopup="true" aria-expanded="false" aria-controls="attach-sheet">+</button>
           <div id="attach-sheet" class="sheet" hidden>
             <label class="sheet-row"><span>Camera</span><input id="pick-camera" type="file" accept="image/*" capture="environment"></label>
-            <label class="sheet-row"><span>Photos</span><input id="pick-photos" type="file" accept="image/*"></label>
-            <label class="sheet-row"><span>Files</span><input id="pick-files" type="file"></label>
+            <label class="sheet-row"><span>📎 Attachments</span><input id="pick-files" type="file"></label>
           </div>
           <div id="attached" class="attached" hidden>
             <img id="thumb" class="thumb" alt="the picture to record" hidden>
@@ -133,7 +132,7 @@ PAGES = {
     </section>
     <section>
       <h2>Outbox</h2>
-      <p class="lead">What the Doer wrote for the morning and for the session.  Mark a page done when you have read it.</p>
+      <p class="lead">What the Doer and the Thinker left for the session.  Mark one done when it is.</p>
       <div id="tasks"></div>
       <p id="tasks-empty" class="empty" hidden>The outbox is empty.</p>
     </section>
@@ -144,12 +143,17 @@ PAGES = {
       <dl id="health" class="health"></dl>
     </section>
     <section>
+      <h2>Caps</h2>
+      <p class="hint">What each actor may spend in a day, in dollars.  Yours to set, one actor at a time; the default row covers an actor with no row of its own.  An actor that reaches its cap writes a note and stops for the day.</p>
+      <div id="caps" class="caps"></div>
+    </section>
+    <section>
       <h2>Watch closely</h2>
       <form id="turbo-form" class="form inline">
         <label class="field"><span>for how many hours</span><input id="turbo-hours" type="number" min="0" max="48" step="1" value="4"></label>
         <button type="submit" class="primary">Turbo</button>
       </form>
-      <p class="hint">The Watch's poll runs every thirty minutes until then, then falls back to every three hours.  Zero turns it off.</p>
+      <p class="hint">The Thinker's glance may ask for this on its own for a few hours; otherwise the Watch reads once a day, at the day's close.  Zero turns it off.</p>
     </section>
     <section>
       <h2>Notifications</h2>
@@ -158,7 +162,7 @@ PAGES = {
         <button id="notify-on" type="button" class="primary small" hidden>Turn on</button>
         <button id="notify-off" type="button" class="ghost small" hidden>Turn off</button>
       </div>
-      <p class="hint">Each step of the routine reaches this phone at its minute, from the record, not from a timer in the app.  On an iPhone the app must be on the home screen first.</p>
+      <p class="hint">The three check-ins (7:00, noon, 8:00 PM) and the week's review reach this phone from the record, not from a timer in the app.  On an iPhone the app must be on the home screen first.</p>
     </section>
     <section>
       <h2>The door</h2>

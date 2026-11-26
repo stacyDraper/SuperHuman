@@ -1,4 +1,5 @@
-// when fire, the web client.  Sunday, October 25, 2026; the Today page and notifications, Monday, October 26.
+// when fire, the web client.  Sunday, October 25, 2026; the Today page and notifications, Monday, October 26; the day as
+// one list with three check-ins, one Done and a note box on every step, caps in Settings, last time, Thursday, November 26.
 // Several pages, one navigation (a bar at the top of every page), one door: every page talks to the connector with the same verbs any AI uses.
 // The key rides on the page's address once (?token=...), then lives in this browser's storage.
 // Pages: today, record (index), whens, thoughts, questions, settings.  The body's data-page says which one this is.
@@ -23,7 +24,7 @@ const params = new URLSearchParams(location.search);
 if (params.get("token")) { store.set("wf_token", params.get("token")); }
 if (params.get("schema") !== null) { store.set("wf_schema", params.get("schema") || null); }
 if (params.get("door")) { store.set("wf_door", params.get("door")); }
-const cameFor = params.get("when");                                             // a notification tapped: the step to show
+const cameFor = params.get("when") ?? params.get("checkin");                   // a notification tapped: the step, or the check-in, to show
 if ([...params.keys()].length) history.replaceState(null, "", location.pathname); // the key stays in storage, not in the bar
 
 const token = () => store.get("wf_token", "");
@@ -309,12 +310,17 @@ function nav() {
 // ---------------------------------------------------------------------------------------------
 const pages = {};
 
-// Today: the routine as it stands for the day, read from the record (the today verb), one card per routine, its steps in
-// clock order.  Done records a fact about the step in the step's own words; the Watch reads met from it.  Nothing here
-// is hard coded: a routine is a bundle of whens on the person's side, marked routine in its shape.
+// Today: the day as one list, read from the record (the today verb).  Since Thursday, November 26, 2026 (Stacy, 6:45 AM,
+// November 2: "every today is potentially different"; 8:50 AM, November 26: the Lecto pattern, three check-ins a day):
+// everything that falls today, from every routine, in clock order; nothing drawn that does not fall today; the three
+// check-ins are the headings of the day's stretches, and "All as planned" under a heading records the stretch's steps
+// at their planned times with one tap.  The morning stretch reaches back to last night.  Each step has one Done
+// button and a note box that is always open; Done with words in the box records the step done in those words.  A
+// worded step (the round) sits under the noon check-in, done when he can.  Nothing here is hard coded: a routine is
+// a bundle of whens on the person's side, marked routine in its shape, and a check-in is a step whose pocket says so.
 pages.today = async function () {
-  const box = $("routines"), empty = $("today-empty"), hint = $("notify-hint");
-  let day = null;   // the record's local day, from the today verb; the planned time of a step is built on it
+  const box = $("routines"), empty = $("today-empty"), hint = $("notify-hint"), lastBox = $("last-time");
+  let day = null, yday = null;   // the record's local day and the one before, from the today verb
   if ("Notification" in window && Notification.permission !== "granted") hint.hidden = false;
   $("day-note").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -323,69 +329,156 @@ pages.today = async function () {
     try { await call("record", args); ta.value = ""; status("Noted.  If it changes a step, a question comes back for your yes.", "ok", 6000); }
     catch (err) {
       if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
-      else { pending.add({ args }); ta.value = ""; status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000); }
+      else { pending.add({ args }); ta.value = ""; status(KEPT, "warn", 6000); }
     }
   });
+  // The planned instant of a step on a day, in this device's zone (the record's day is the person's day).
+  const plannedAt = (w, onDay) => (w.at && onDay ? new Date(`${onDay}T${w.at}:00`) : null);
+  const dayBefore = (d) => { const x = new Date(`${d}T12:00:00`); x.setDate(x.getDate() - 1); return dayKey(x.toISOString()); };
+  const clock = (at) => (at ? fmtTime(`${todayKey()}T${at}:00`) : "");
+
   await render();
+  renderLastTime();
+
+
   async function render() {
     try {
       const t = await call("today");
-      day = t.day ?? null;
-      const whens = t.whens ?? [];
-      const byRoutine = new Map();
-      for (const w of whens) { const k = w.bundle ?? w.id; if (!byRoutine.has(k)) byRoutine.set(k, { name: w.routine_name ?? w.routine, steps: [] }); byRoutine.get(k).steps.push(w); }
-      box.replaceChildren(...[...byRoutine.values()].map((r) => el("section", { class: "routine" },
-        byRoutine.size > 1 || r.name ? el("h2", {}, r.name ?? "the routine") : null,
-        r.steps.map((w) => step(w)),
-      )));
-      empty.hidden = whens.length > 0;
-      if (cameFor) { const target = box.querySelector(`[data-when="${cameFor}"]`); if (target) { target.classList.add("flash"); target.scrollIntoView({ block: "center" }); } }
+      day = t.day ?? todayKey(); yday = dayBefore(day);
+      const all = (t.whens ?? []).map((w) => ({ ...w, on: day }));
+      const checkins = all.filter((w) => w.shape?.checkin && w.falls_today).sort((a, b) => (a.at ?? "").localeCompare(b.at ?? ""));
+      const steps = all.filter((w) => !w.shape?.checkin && w.falls_today);
+      let yesterday = [];
+      if (checkins.length) {
+        // last night: the steps of the day before whose clock came after the last check-in of that day
+        const last = checkins[checkins.length - 1].at;
+        try { const y = await call("today", { day: yday }); yesterday = (y.whens ?? []).filter((w) => !w.shape?.checkin && w.falls_today && w.at && w.at > last).map((w) => ({ ...w, on: yday, lastNight: true })); }
+        catch { /* the morning stretch shows today's own steps then */ }
+      }
+      // The stretches: each check-in heads the steps whose clock falls between the check-in before it and itself;
+      // the first stretch reaches back to last night; what comes after the last check-in is tonight.
+      const sections = [];
+      if (checkins.length === 0) {
+        sections.push({ title: "Today", steps });
+      } else {
+        const worded = steps.filter((w) => !w.at);
+        let prev = null;
+        checkins.forEach((c, i) => {
+          const mine = steps.filter((w) => w.at && (prev === null || w.at > prev) && w.at <= c.at);
+          const section = { checkin: c, title: c.words, at: c.at, steps: i === 0 ? [...yesterday, ...mine] : mine };
+          if (i === 1 || (i === 0 && checkins.length === 1)) section.steps = [...worded, ...section.steps];   // the round and the like: done when he can, by noon
+          sections.push(section);
+          prev = c.at;
+        });
+        const tonight = steps.filter((w) => w.at && w.at > prev);
+        if (tonight.length) sections.push({ title: "Tonight", at: null, steps: tonight, tonight: true });
+      }
+      box.replaceChildren(...sections.map((s) => section(s)));
+      empty.hidden = all.length > 0;
+      const target = cameFor ? box.querySelector(`[data-when="${cameFor}"]`) : null;
+      if (target) { target.classList.add("flash"); target.scrollIntoView({ block: "start" }); }
     } catch (err) { if (!needKey(err)) status(`The record did not answer: ${err.message}`, "warn", 6000); }
   }
-  function step(w) {
-    const done = (w.facts_today ?? []).length;
-    const last = done ? w.facts_today[w.facts_today.length - 1] : null;
-    const state = w.reading === "met" ? el("p", { class: "state met" }, `met${last ? `, ${fmtTime(last.happened_at)}` : ""}`)
-      : w.reading === "silence" ? el("p", { class: "state silence" }, "silence")
-      : done ? el("p", { class: "state met" }, `done, ${fmtTime(last.happened_at)}${done > 1 ? ` (${done} times)` : ""}`)
-      : el("p", { class: "state" }, w.falls_today ? (w.condition_words ?? "open") : "not today");
-    const btn = el("button", { class: `small${done ? " ghost" : " primary"}`, type: "button" }, done ? "Again" : "Done");
+
+  function section(s) {
+    const open = s.steps.filter((w) => !(w.facts_today ?? []).length);
+    const past = open.filter((w) => { const p = plannedAt(w, w.on); return p ? p.getTime() < Date.now() : true; });
+    const head = el("div", { class: "stretch-head" },
+      el("h2", {}, s.title, s.at ? el("span", { class: "when-at" }, ` · ${clock(s.at)}`) : null),
+      s.checkin ? (open.length === 0 && s.steps.length
+        ? el("p", { class: "state met" }, "all recorded")
+        : past.length ? allButton(s, past) : el("p", { class: "state" }, "nothing due yet")) : null);
+    const art = el("section", { class: `stretch${s.tonight ? " tonight" : ""}`, "data-when": s.checkin?.id ?? null }, head, s.steps.map((w) => step(w)));
+    if (s.checkin && (s.checkin.facts_today ?? []).length) art.append(el("p", { class: "meta" }, `checked in ${fmtTime(s.checkin.facts_today[s.checkin.facts_today.length - 1].happened_at)}`));
+    if (s.tonight) art.append(el("p", { class: "meta" }, "the morning check-in picks these up"));
+    return art;
+  }
+
+  // One tap: every open step of the stretch whose clock has passed is recorded at its planned time, and the check-in
+  // itself is recorded as done, naming the steps.  Stacy, October 27: "done means it was done according to plan or
+  // assertion."
+  function allButton(s, past) {
+    const btn = el("button", { class: "small primary", type: "button" }, `All as planned (${past.length})`);
     btn.addEventListener("click", async () => {
       btn.disabled = true;
-      // Done means it was done according to plan (Stacy, October 27, 2026: "done means it was done according to plan or
-      // assertion").  A first Done after the step's clock is recorded at the planned time; a Done before it, or Again,
-      // at the tap.
-      const planned = !done && w.at && day ? new Date(`${day}T${w.at}:00`) : null;
-      const asPlanned = !!planned && planned.getTime() < Date.now();
-      const args = { said: w.words, about: w.id, shape: { via: "when_fire_web", done: true, routine: w.routine_name ?? null, ...(asPlanned ? { as_planned: true } : {}) } };
-      if (asPlanned) args.happened_at = planned.toISOString();
-      try { await call("record", args); status(asPlanned ? `Recorded, as planned at ${fmtTime(planned.toISOString())}.` : `Recorded, ${fmtTime(new Date().toISOString())}.`, "ok"); await render(); }
-      catch (err) {
+      const recorded = [];
+      try {
+        for (const w of past) {
+          const planned = plannedAt(w, w.on);
+          const args = { said: w.words, about: w.id, shape: { via: "when_fire_web", done: true, as_planned: !!planned, checkin: s.checkin.id, routine: w.routine_name ?? null } };
+          if (planned) args.happened_at = planned.toISOString();
+          await call("record", args);
+          recorded.push(w.id);
+        }
+        await call("record", { said: `${s.checkin.words}: ${recorded.length} as planned`, about: s.checkin.id, shape: { via: "when_fire_web", done: true, checkin: s.checkin.shape?.checkin ?? true, steps: recorded } });
+        status(`Recorded, ${recorded.length} as planned.`, "ok");
+        await render();
+      } catch (err) {
         if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
-        else { pending.add({ args }); status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000); btn.disabled = false; }
+        else status(`${recorded.length} recorded, then: ${why(err)}.  Tap again for the rest.`, "warn", 8000);
+        btn.disabled = false;
       }
     });
-    const noteBtn = el("button", { class: "small ghost note", type: "button" }, "note");
-    const noteBox = el("textarea", { rows: 2, placeholder: "In your words: a slip, a change, anything…" });
-    const noteSend = el("button", { class: "small", type: "button" }, "Note");
-    const noteForm = el("div", { class: "step-note", hidden: true }, noteBox, el("div", { class: "row" }, noteSend));
-    noteBtn.addEventListener("click", () => { noteForm.hidden = !noteForm.hidden; if (!noteForm.hidden) noteBox.focus(); });
-    noteSend.addEventListener("click", async () => {
-      const words = noteBox.value.trim(); if (!words) { noteBox.focus(); return; }
-      noteSend.disabled = true;
-      const args = { said: words, about: w.id, shape: { via: "when_fire_web", note: "step", routine: w.routine_name ?? null } };
-      try { await call("record", args); noteBox.value = ""; noteForm.hidden = true; status("Noted.  If it changes the step, a question comes back for your yes.", "ok", 6000); }
-      catch (err) {
+    return btn;
+  }
+
+  function step(w) {
+    const facts = w.facts_today ?? [];
+    const done = facts.length;
+    const last = done ? facts[done - 1] : null;
+    const state = w.reading === "met" ? el("p", { class: "state met" }, `met${last ? `, ${fmtTime(last.happened_at)}` : ""}`)
+      : w.reading === "silence" ? el("p", { class: "state silence" }, "silence")
+      : done ? el("p", { class: "state met" }, `done, ${fmtTime(last.happened_at)}${done > 1 ? ` (${done} times)` : ""}${last.words ? `: ${last.words}` : last.said !== w.words ? `: ${short(last.said, 60)}` : ""}`)
+      : el("p", { class: "state" }, w.lastNight ? "last night" : (w.condition_words ?? "open"));
+    const noteBox = el("textarea", { rows: 1, class: "step-words", placeholder: done ? "a note…" : "a note, in your words…" });
+    const btn = el("button", { class: `small${done ? " ghost" : " primary"}`, type: "button" }, done ? "Again" : "Done");
+    // One button.  Before done: Done, with or without words.  After done: Note when the box has words, Again when not.
+    const relabel = () => { if (done) btn.textContent = noteBox.value.trim() ? "Note" : "Again"; };
+    noteBox.addEventListener("input", () => { noteBox.style.height = "auto"; noteBox.style.height = `${Math.min(noteBox.scrollHeight, 200)}px`; relabel(); });
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      const words = noteBox.value.trim();
+      let args;
+      if (done && words) {
+        args = { said: words, about: w.id, shape: { via: "when_fire_web", note: "step", routine: w.routine_name ?? null } };
+      } else {
+        // A first Done after the step's clock is recorded at the planned time; a Done before it, or Again, at the tap.
+        const planned = !done ? plannedAt(w, w.on) : null;
+        const asPlanned = !!planned && planned.getTime() < Date.now();
+        args = { said: words || w.words, about: w.id, shape: { via: "when_fire_web", done: true, routine: w.routine_name ?? null, ...(asPlanned ? { as_planned: true } : {}), ...(words ? { words, step: w.words } : {}) } };
+        if (asPlanned) args.happened_at = planned.toISOString();
+      }
+      try {
+        await call("record", args);
+        status(args.shape.note ? "Noted.  If it changes the step, a question comes back for your yes." : args.happened_at ? `Recorded, as planned at ${fmtTime(args.happened_at)}.` : `Recorded, ${fmtTime(new Date().toISOString())}.`, "ok", 5000);
+        await render();
+      } catch (err) {
         if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
-        else { pending.add({ args }); noteBox.value = ""; noteForm.hidden = true; status("Kept on this phone; it goes to the record when the connection is back.", "warn", 6000); }
-      } finally { noteSend.disabled = false; }
+        else { pending.add({ args }); status(KEPT, "warn", 6000); btn.disabled = false; }
+      }
     });
-    return el("article", { class: `step${done ? " done" : ""}${w.falls_today ? "" : " off-day"}`, "data-when": w.id },
-      el("span", { class: "clock" }, w.at ?? "—"),
-      el("div", {}, el("p", { class: "words" }, w.words), state),
-      el("div", { class: "acts" }, btn, noteBtn),
-      noteForm,
+    return el("article", { class: `step${done ? " done" : ""}${w.lastNight ? " last-night" : ""}`, "data-when": w.id },
+      el("span", { class: "clock" }, w.at ? clock(w.at) : "—"),
+      el("div", { class: "body" }, el("p", { class: "words" }, w.words), state, noteBox),
+      el("div", { class: "acts" }, btn),
     );
+  }
+
+  // Last time: the last session of each kind of workout, from the logged pages, so a gym day starts with the numbers.
+  async function renderLastTime() {
+    if (!lastBox) return;
+    try {
+      const sessions = await call("last_time", { each: 1 });
+      if (!sessions?.length) { lastBox.hidden = true; return; }
+      const order = { push: 0, pull: 1, legs: 2, lower: 3 };
+      sessions.sort((a, b) => (order[a.workout] ?? 9) - (order[b.workout] ?? 9) || (a.happened_at < b.happened_at ? 1 : -1));
+      lastBox.replaceChildren(el("h2", {}, "Last time"), ...sessions.map((s) => el("details", { class: "last" },
+        el("summary", {}, el("span", { class: "k" }, s.workout), ` · ${fmtDay(s.happened_at)}`),
+        el("ul", {}, (s.exercises ?? []).map((e) => el("li", {}, el("span", { class: "k" }, e.name), e.setting ? el("span", { class: "meta" }, ` (${e.setting})`) : null, ": ",
+          (e.sets ?? []).map((x) => `${x.weight}×${x.reps}${x.assisted ? "A" : ""}`).join(", ") || "warm-ups only"))),
+      )));
+      lastBox.hidden = false;
+    } catch { lastBox.hidden = true; }
   }
 };
 
@@ -401,14 +494,13 @@ pages.record = async function () {
   const setNow = () => { when.value = inputValue(); timeTouched = false; when.classList.remove("touched"); };
   setNow();
   when.addEventListener("input", () => { timeTouched = true; when.classList.add("touched"); });
-  $("now").addEventListener("click", setNow);
   said.addEventListener("input", () => { said.style.height = "auto"; said.style.height = `${Math.min(said.scrollHeight, 320)}px`; });
 
-  // the plus: camera, photos, files
+  // the plus: Camera (straight to the camera) and Attachments (the phone's own menu: the library, a photo, any file)
   const openSheet = (open) => { sheet.hidden = !open; plus.setAttribute("aria-expanded", String(open)); plus.textContent = open ? "×" : "+"; };
   plus.addEventListener("click", () => openSheet(sheet.hidden));
   document.addEventListener("click", (e) => { if (!sheet.hidden && !sheet.contains(e.target) && e.target !== plus) openSheet(false); });
-  for (const id of ["pick-camera", "pick-photos", "pick-files"]) {
+  for (const id of ["pick-camera", "pick-files"]) {
     $(id).addEventListener("change", async (e) => {
       const input = e.target, f = input.files?.[0]; openSheet(false);
       if (!f) return;
@@ -639,12 +731,16 @@ pages.thoughts = async function () {
       for (const s of rec.snapshots ?? []) items.push({ at: s.written_at, kind: s.subject_kind, s });
       if (toggle.checked) for (const f of rec.facts.filter((f) => isNote(f) && !/^error:/.test(f.said_by) && ["thinker", "claude", "ai"].includes(f.said_by))) items.push({ at: f.recorded_at, kind: "note", f });
       items.sort((a, b) => (a.at < b.at ? 1 : -1));
+      // the latest week's review stands first, whatever was written since
+      const week = items.find((it) => it.kind === "week");
+      if (week) { items.splice(items.indexOf(week), 1); items.unshift(week); }
       const page = items.slice(0, shown);
       list.replaceChildren(...page.map((it) => {
         if (it.kind === "note") return el("article", { class: "thought note" }, el("h3", {}, `${it.f.said_by}, ${fmtStamp(it.f.recorded_at)}`), el("p", {}, it.f.said));
         const s = it.s;
         const [main, ...rest] = s.says.split("\n\n");
-        const title = s.subject_kind === "day" ? `The day, ${fmtDayLong(s.shape?.day ? `${s.shape.day}T12:00:00` : s.watermark)}`
+        const title = s.subject_kind === "week" ? `The week, to ${fmtDayLong(s.shape?.to ? `${s.shape.to}T12:00:00` : s.watermark)}`
+          : s.subject_kind === "day" ? `The day, ${fmtDayLong(s.shape?.day ? `${s.shape.day}T12:00:00` : s.watermark)}`
           : s.subject_kind === "episode" ? `Episode, ${fmtStamp(s.watermark)}`
           : s.subject_kind === "when" ? `When: ${firstWords(byId.get(s.subject_id)?.words ?? "(an earlier wording)", 8)}`
           : `${s.subject_kind}`;
@@ -720,7 +816,7 @@ pages.settings = async function () {
       const j = sub.toJSON();
       await call("subscribe", { endpoint: j.endpoint, keys: j.keys, agent: navigator.userAgent.slice(0, 200) });
       await keyCache.put();
-      status("Notifications on.  Each step reaches this phone at its minute.", "ok", 6000);
+      status("Notifications on.  The three check-ins reach this phone.", "ok", 6000);
     } catch (err) { if (!needKey(err)) status(`Not turned on: ${err.message}`, "warn", 8000); }
     finally { nOn.disabled = false; await showNotify(); }
   });
@@ -752,6 +848,32 @@ pages.settings = async function () {
     const hours = Number($("turbo-hours").value || 0);
     try { const r = await call("turbo", { hours }); status(hours > 0 ? `Watching closely until ${fmtStamp(r.turbo_until)}.` : "Turbo off.", "ok", 6000); } catch (err) { if (!needKey(err)) status(err.message, "warn", 6000); }
   });
+  // Caps: the day's spend against each actor's cap, and a box per actor the person sets; the default row covers an
+  // actor with no row of its own.  Stacy, October 26: the daily limit is his, in Settings, one per actor; a change
+  // is one named row at a time, never a wildcard.
+  await renderCaps();
+  async function renderCaps() {
+    const list = $("caps"); if (!list) return;
+    try {
+      const c = await call("caps");
+      const row = (actor, label, spent, value, applies) => {
+        const input = el("input", { type: "text", inputmode: "decimal", value: value ?? "", placeholder: applies ?? "" });
+        const save = el("button", { class: "small", type: "button" }, "Set");
+        save.addEventListener("click", async () => {
+          const v = input.value.trim(); if (!/^[0-9]+(\.[0-9]{1,2})?$/.test(v)) { status("A number of dollars, like 0.90.", "warn", 4000); return; }
+          save.disabled = true;
+          try { await call("caps", { set: { actor, daily_dollars: v } }); status(`${label}: ${v} a day.`, "ok"); await renderCaps(); }
+          catch (err) { status(`Not set: ${err.message}`, "warn", 6000); save.disabled = false; }
+        });
+        return el("div", { class: "cap-row" }, el("span", { class: "k" }, label), el("span", { class: "spent" }, spent === null ? "" : `$${Number(spent).toFixed(2)} today`),
+          el("span", { class: "meta" }, value ? "cap" : `cap ${applies ?? "none"} (default)`), input, save);
+      };
+      list.replaceChildren(
+        ...(c.actors ?? []).map((a) => row(a.actor, a.actor, a.spent_today, a.daily_dollars, a.applies)),
+        row("*", "default", null, c.default?.daily_dollars, c.default?.applies),
+        el("p", { class: "meta" }, `All actors today: $${Number(c.spent_today ?? 0).toFixed(2)}.`));
+    } catch (err) { if (!needKey(err)) list.replaceChildren(el("p", { class: "meta" }, `The caps did not answer: ${err.message}`)); }
+  }
   $("key-masked").textContent = token() ? `${token().slice(0, 4)}…${token().slice(-4)}` : "none";
   $("address").textContent = `${BASE}${doorName()}`;
   if (!standalone && /iPhone|iPad/.test(navigator.userAgent)) $("install-hint").hidden = false;

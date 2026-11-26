@@ -1,8 +1,9 @@
 // when fire, the web client's service worker.  Sunday, October 25, 2026; pushes, Monday, October 26.
 // Keeps the shell available offline: the pages, the script, the styles, the icon.  The connector is never cached.
-// Receives the routine's pushes from the notify handler and shows each step as a notification.  Done on the
-// notification records the fact straight from here, through the door's address the page keeps in the key cache;
-// a plain tap opens the Today page on that step.
+// Receives the pushes from the notify handler.  Since November 26, 2026 these are the three check-ins (a tap opens
+// Today on the stretch since the last one) and the week's review; a step pushed on its own (its pocket says push)
+// still carries Done, which records the fact straight from here through the door's address the page keeps in the
+// key cache.
 const SHELL = "when-fire-shell-v8";
 const ASSETS = ["./", "./index.html", "./today.html", "./whens.html", "./thoughts.html", "./questions.html", "./settings.html", "./app.js", "./styles.css", "./icon-512.png", "./manifest.webmanifest"];
 const SCOPE = self.registration.scope;

@@ -115,7 +115,7 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .pending li { display: flex; flex-direction: column; }
 
 /* the log */
-.day h3 { position: sticky; top: 0; background: var(--bg); padding: 6px 0; z-index: 1; }
+.day h3 { position: sticky; top: 0; background: var(--bg); padding: 6px 0; z-index: 1; }   /* the bar is above it: a heading slides under the bar, never over it (Stacy, October 25) */
 .facts { list-style: none; margin: 0; padding: 0; }
 .fact { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .fact .line { display: grid; grid-template-columns: 5.2em 1fr; gap: 10px; align-items: baseline; }
@@ -172,6 +172,7 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 
 /* the tabs: the bar along the bottom, one glyph and a word per page */
 .tabs {
+  z-index: 20;
   position: fixed; left: 0; right: 0; bottom: 0; height: calc(var(--tabs-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   display: grid; grid-template-columns: repeat(6, 1fr);
@@ -225,3 +226,30 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .note-form { margin: 18px 0 0; display: flex; flex-direction: column; gap: 8px; }
 .note-form textarea { width: 100%; box-sizing: border-box; }
 .question .row { display: flex; gap: 8px; align-items: center; }
+
+/* today, November 26, 2026: the day in stretches, one Done and an open note box on every step, last time */
+.stretch { margin: 0 0 20px; }
+.stretch-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
+.stretch-head h2 { font-size: 1rem; color: var(--ink-2); margin: 0; }
+.stretch-head .when-at { color: var(--ink-3); font-weight: normal; }
+.stretch-head .state { margin: 0; }
+.stretch.tonight .step { opacity: 0.7; }
+.stretch[data-when].flash { outline: 2px solid var(--ember); border-radius: var(--radius); padding: 6px; }
+.step { grid-template-columns: 58px 1fr auto; align-items: start; }
+.step .body { min-width: 0; }
+.step .step-words { width: 100%; box-sizing: border-box; margin-top: 6px; min-height: 30px; resize: none; font-size: 0.9rem; padding: 4px 8px; background: transparent; border: 1px dashed var(--line); border-radius: 8px; color: var(--ink); }
+.step .step-words:focus { border-style: solid; background: var(--bg); }
+.step.last-night .clock::after { content: " ·"; color: var(--ink-3); }
+.last-time { margin: 24px 0 0; }
+.last-time h2 { font-size: 1rem; color: var(--ink-2); margin: 0 0 8px; }
+.last-time details { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; margin: 0 0 6px; }
+.last-time summary { cursor: pointer; }
+.last-time .k { text-transform: capitalize; }
+.last-time ul { margin: 6px 0 0; padding-left: 18px; font-size: 0.9rem; }
+.last-time li .k { text-transform: none; }
+.caps .cap-row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "k spent" "meta meta" "input save"; gap: 4px 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.caps .cap-row .k { grid-area: k; text-transform: capitalize; }
+.caps .cap-row .spent { grid-area: spent; color: var(--ink-3); font-size: 0.85rem; }
+.caps .cap-row .meta { grid-area: meta; }
+.caps .cap-row input { grid-area: input; width: 100%; box-sizing: border-box; }
+.caps .cap-row button { grid-area: save; }

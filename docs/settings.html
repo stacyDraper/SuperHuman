@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=20261124a">
+  <link rel="stylesheet" href="./styles.css?v=20261126a">
 </head>
 <body data-page="settings">
   <header class="top">
@@ -37,12 +37,17 @@
       <dl id="health" class="health"></dl>
     </section>
     <section>
+      <h2>Caps</h2>
+      <p class="hint">What each actor may spend in a day, in dollars.  Yours to set, one actor at a time; the default row covers an actor with no row of its own.  An actor that reaches its cap writes a note and stops for the day.</p>
+      <div id="caps" class="caps"></div>
+    </section>
+    <section>
       <h2>Watch closely</h2>
       <form id="turbo-form" class="form inline">
         <label class="field"><span>for how many hours</span><input id="turbo-hours" type="number" min="0" max="48" step="1" value="4"></label>
         <button type="submit" class="primary">Turbo</button>
       </form>
-      <p class="hint">The Watch's poll runs every thirty minutes until then, then falls back to every three hours.  Zero turns it off.</p>
+      <p class="hint">The Thinker's glance may ask for this on its own for a few hours; otherwise the Watch reads once a day, at the day's close.  Zero turns it off.</p>
     </section>
     <section>
       <h2>Notifications</h2>
@@ -51,7 +56,7 @@
         <button id="notify-on" type="button" class="primary small" hidden>Turn on</button>
         <button id="notify-off" type="button" class="ghost small" hidden>Turn off</button>
       </div>
-      <p class="hint">Each step of the routine reaches this phone at its minute, from the record, not from a timer in the app.  On an iPhone the app must be on the home screen first.</p>
+      <p class="hint">The three check-ins (7:00, noon, 8:00 PM) and the week's review reach this phone from the record, not from a timer in the app.  On an iPhone the app must be on the home screen first.</p>
     </section>
     <section>
       <h2>The door</h2>
@@ -77,6 +82,6 @@
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261124a"></script>
+  <script src="./app.js?v=20261126a"></script>
 </body>
 </html>
