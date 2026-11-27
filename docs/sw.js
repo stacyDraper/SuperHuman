@@ -3,8 +3,9 @@
 // Receives the pushes from the notify handler.  Since November 26, 2026 these are the three check-ins (a tap opens
 // Today on the stretch since the last one) and the week's review; a step pushed on its own (its pocket says push)
 // still carries Done, which records the fact straight from here through the door's address the page keeps in the
-// key cache.
-const SHELL = "when-fire-shell-v12";
+// key cache.  Since the night of November 26, 2026 the key cache holds the door and the key apart, and the key goes
+// in a header (Duet's review, 1.17); an entry in the older form (the address with the key on it) still serves.
+const SHELL = "when-fire-shell-v13";
 const ASSETS = ["./", "./index.html", "./today.html", "./whens.html", "./thoughts.html", "./questions.html", "./settings.html", "./app.js", "./styles.css", "./icon-512.png", "./manifest.webmanifest"];
 const SCOPE = self.registration.scope;
 const KEY_CACHE = "when-fire-key";
@@ -67,14 +68,17 @@ async function recordDone(d) {
     const c = await caches.open(KEY_CACHE);
     const r = await c.match("./key");
     if (!r) return false;
-    const address = await r.text();
+    const kept = await r.text();
+    let address = kept;
+    const headers = { "content-type": "application/json" };
+    try { const j = JSON.parse(kept); if (j?.door) { address = j.door; if (j.token) headers["x-when-fire-token"] = j.token; } } catch { /* the older form: the key on the address */ }
     // Done means it was done according to plan: after the step's minute, the planned time; before it, the tap.
     const planned = d.planned_at ? new Date(d.planned_at) : null;
     const asPlanned = !!planned && !isNaN(planned.getTime()) && planned.getTime() < Date.now();
     const body = { jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name: "record", arguments: {
       said: d.body, about: d.when, ...(asPlanned ? { happened_at: planned.toISOString() } : {}),
       shape: { via: "when_fire_web", done: true, fire: d.fire ?? null, from: "notification", ...(asPlanned ? { as_planned: true } : {}) } } } };
-    const res = await fetch(address, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetch(address, { method: "POST", headers, body: JSON.stringify(body) });
     if (!res.ok) return false;
     const j = await res.json();
     return !j?.error && !j?.result?.isError;

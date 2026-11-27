@@ -21,7 +21,7 @@ HEAD = """<!doctype html>
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=20261126e">
+  <link rel="stylesheet" href="./styles.css?v=20261126f">
 </head>
 <body data-page="{page}">
   <header class="top">
@@ -47,7 +47,7 @@ HEAD = """<!doctype html>
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261126e"></script>
+  <script src="./app.js?v=20261126f"></script>
 </body>
 </html>
 """
@@ -55,6 +55,7 @@ HEAD = """<!doctype html>
 PAGES = {
     "today.html": dict(page="today", title="when fire · today", heading="Today", main="""
     <section id="sitting" class="sitting" hidden></section>
+    <p id="weight" class="weight" hidden></p>
     <p class="lead"><span id="today-date"></span>.  What falls today, in clock order, in three stretches.  Under a check-in, one tap records the stretch as planned; a step you didn't do, leave alone.</p>
     <div id="routines"></div>
     <p id="today-empty" class="empty" hidden>No routine on your side of the record yet.  A routine is a bundle of whens, asserted with your yes.</p>
@@ -92,7 +93,11 @@ PAGES = {
             <label class="toggle small page-toggle"><input id="is-page" type="checkbox"> a page of the log: read it into a table for me to check</label>
           </div>
         </div>
-        <button id="record-btn" type="submit" class="primary big">Record</button>
+        <div class="row buttons">
+          <button id="rewrite-btn" type="button" class="ghost big" title="Fix the dictation: names, homophones, split words.  Nothing added.">Rewrite</button>
+          <button id="record-btn" type="submit" class="primary big">Record</button>
+        </div>
+        <p id="rewrite-note" class="hint small" hidden></p>
       </form>
       <section id="pending" class="pending" hidden>
         <h3>Kept on this phone, not yet on the record</h3>

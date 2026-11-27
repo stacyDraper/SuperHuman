@@ -3,6 +3,10 @@
 // The evening of November 26, the push: the Thinker's sitting at the top of Today and whole on Thoughts with Next; the
 // eight areas on Thoughts with his own number; the Thinker's notes and the questions off the page; last night's steps
 // in dusk on Today; a page of the log read into a table under Pages to check on Record, his to fix and record.
+// Late that night, after Duet's review (shell v13): Rewrite beside Record, the dictation fixed by the connector and
+// kept with the fact; a ? cell reaches the record as ?; the pages list is not redrawn under his hands; the key goes
+// in a header, not on the address; the day's weight on Today, as the record picks it; a page the reader could not
+// read is his to type; Next cannot take the old sitting for the new.
 // Several pages, one navigation (a bar at the top of every page), one door: every page talks to the connector with the same verbs any AI uses.
 // The key rides on the page's address once (?token=...), then lives in this browser's storage.
 // Pages: today, record (index), whens, thoughts, questions, settings.  The body's data-page says which one this is.
@@ -33,12 +37,14 @@ if ([...params.keys()].length) history.replaceState(null, "", location.pathname)
 const token = () => store.get("wf_token", "");
 const doorName = () => store.get("wf_door", "when-fire-mcp");
 const schema = () => store.get("wf_schema", "");
-const address = () => `${BASE}${doorName()}?token=${encodeURIComponent(token())}${schema() ? `&schema=${encodeURIComponent(schema())}` : ""}`;
+// The door's address carries no key since the night of November 26, 2026 (Duet's review, 1.17): the key travels in a
+// header, so no log of addresses holds it.
+const address = () => `${BASE}${doorName()}${schema() ? `?schema=${encodeURIComponent(schema())}` : ""}`;
 
 async function call(name, args = {}) {
   if (!token()) throw new Error("no key");
   const r = await fetch(address(), {
-    method: "POST", headers: { "content-type": "application/json" },
+    method: "POST", headers: { "content-type": "application/json", "x-when-fire-token": token() },
     body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name, arguments: args } }),
   });
   if (r.status === 401) throw new Error("refused");
@@ -57,7 +63,8 @@ async function call(name, args = {}) {
 // reads it there.  Forgetting the key, or turning notifications off, removes it.
 const KEY_CACHE = "when-fire-key";
 const keyCache = {
-  async put() { try { const c = await caches.open(KEY_CACHE); await c.put("./key", new Response(address(), { headers: { "content-type": "text/plain" } })); } catch { /* no cache store */ } },
+  // the door and the key, apart, so the worker sends the key in a header too (an older entry held the address with the key on it)
+  async put() { try { const c = await caches.open(KEY_CACHE); await c.put("./key", new Response(JSON.stringify({ door: address(), token: token() }), { headers: { "content-type": "application/json" } })); } catch { /* no cache store */ } },
   async drop() { try { await caches.delete(KEY_CACHE); } catch { /* nothing to drop */ } },
 };
 
@@ -349,6 +356,7 @@ pages.today = async function () {
       const t = await call("today");
       day = t.day ?? todayKey(); yday = dayBefore(day);
       renderSitting($("sitting"), t.sitting, false);
+      renderWeight($("weight"), t.weight);
       const all = (t.whens ?? []).map((w) => ({ ...w, on: day }));
       const checkins = all.filter((w) => w.shape?.checkin && w.falls_today).sort((a, b) => (a.at ?? "").localeCompare(b.at ?? ""));
       const steps = all.filter((w) => !w.shape?.checkin && w.falls_today);
@@ -513,6 +521,29 @@ pages.today = async function () {
   }
 };
 
+// The day's weight, as the record picks it (the night of November 26, 2026; Stacy, 9:22 PM: "Instead of me weighting
+// just once a day how about you figure out the best one to use, you know when I wake up so I'd think the first one
+// after that would be the one"): the first scale reading after the night ended, with the other readings of the day
+// named beside it.  Every reading stays on the record as what it is; this is the one the day goes by.
+function renderWeight(box, w) {
+  if (!box) return;
+  if (!w || !w.fact) {
+    const n = Array.isArray(w?.others) ? w.others.length : 0;
+    if (!n) { box.hidden = true; return; }
+    box.replaceChildren(el("span", { class: "k" }, "weight"), `no reading yet after ${w.woke ? fmtTime(w.woke) : "the night"}`,
+      el("span", { class: "meta" }, `${plural(n, "reading")} earlier today: ${w.others.map((o) => `${Number(o.lb).toFixed(1)} at ${fmtTime(o.at)}`).join(", ")}`));
+    box.hidden = false;
+    return;
+  }
+  const others = Array.isArray(w.others) ? w.others : [];
+  box.replaceChildren(
+    el("span", { class: "k" }, "weight"), el("span", { class: "big" }, `${Number(w.lb).toFixed(1)} lb`), ` at ${fmtTime(w.at)}`,
+    w.fat_pct != null ? `, fat ${Number(w.fat_pct).toFixed(1)} %` : "", w.muscle_lb != null ? `, muscle ${w.muscle_lb} lb` : "",
+    el("span", { class: "meta" }, `${w.how ?? "the day's reading"}${others.length ? ` · also ${others.map((o) => `${Number(o.lb).toFixed(1)} at ${fmtTime(o.at)}`).join(", ")}` : ""}`),
+  );
+  box.hidden = false;
+}
+
 // The Thinker's sitting (push brief 15a, November 26, 2026): one line a week, the one move in one area that lifts the
 // most in the others, with the date it was first said.  At the top of Today the line alone, the rest a tap away; on
 // Thoughts the whole of it: the chain, the why with what it drew on, the two runners-up, the page from the shelf.
@@ -541,15 +572,46 @@ function renderSitting(box, s, full) {
 pages.record = async function () {
   const form = $("record-form"), said = $("said"), when = $("happened"), sheet = $("attach-sheet"), plus = $("plus");
   let timeTouched = false, attachment = null, thumbUrl = null, picking = 0, reads = 0, holds = 0, timer = null;
+  let dictated = null, pageTouched = false, pagesBusy = false;   // the words as dictated, once Rewrite has run; the page box tapped by hand; a page's Record on its way
   const READING = "Reading the file…";
   // Record waits while a file is still being read and while a send is on its way.
-  const hold = (on) => { holds += on ? 1 : -1; $("record-btn").disabled = holds > 0; };
+  const hold = (on) => { holds += on ? 1 : -1; $("record-btn").disabled = holds > 0; const rw = $("rewrite-btn"); if (rw) rw.disabled = holds > 0; };
   let windowDays = 2, shown = 20;
   const worldFacts = (rec) => rec.facts.filter((f) => !isNote(f) && f.kind === "world").sort((a, b) => (a.happened_at < b.happened_at ? 1 : -1));
   const setNow = () => { when.value = inputValue(); timeTouched = false; when.classList.remove("touched"); };
   setNow();
   when.addEventListener("input", () => { timeTouched = true; when.classList.add("touched"); });
-  said.addEventListener("input", () => { said.style.height = "auto"; said.style.height = `${Math.min(said.scrollHeight, 320)}px`; });
+  // the page box follows the words while a picture is attached, until he sets it by hand (the review's 1.10)
+  const PAGE_WORDS = /\b(log|pages?|workout)\b/i;
+  const followWords = () => { const pageBox = $("is-page"); if (pageBox && attachment?.media_type.startsWith("image/") && !pageTouched) pageBox.checked = PAGE_WORDS.test(said.value); };
+  said.addEventListener("input", () => { said.style.height = "auto"; said.style.height = `${Math.min(said.scrollHeight, 320)}px`; followWords(); if (!said.value.trim()) { dictated = null; const n = $("rewrite-note"); if (n) n.hidden = true; } });
+  $("is-page")?.addEventListener("change", () => { pageTouched = true; });
+
+  // Rewrite (Stacy, November 26, 2026, 9:31 PM: "When I write a record it should get rewritten and then I click log.
+  // Or I have two buttons.  Rewrite and log."): the connector's rewrite verb fixes the dictation and adds nothing; the
+  // box takes the rewrite, the words as dictated ride with the fact when he records it, and Undo puts them back.
+  const rewriteBtn = $("rewrite-btn"), rewriteNote = $("rewrite-note");
+  if (rewriteBtn) rewriteBtn.addEventListener("click", async () => {
+    const words = said.value.trim();
+    if (!words) { said.focus(); return; }
+    rewriteBtn.disabled = true; rewriteBtn.textContent = "Rewriting…";
+    try {
+      const out = await call("rewrite", { words });
+      if (!out?.words) throw new Error("no words came back");
+      if (!out.changed) { rewriteNote.replaceChildren("Nothing to fix."); rewriteNote.hidden = false; return; }
+      const before = dictated ?? words;   // a second Rewrite keeps the first dictation as the dictation
+      dictated = before;
+      said.value = out.words; said.style.height = "auto"; said.style.height = `${Math.min(said.scrollHeight, 320)}px`; followWords();
+      const changes = Array.isArray(out.changes) ? out.changes : [];
+      const undo = el("button", { type: "button", class: "link" }, "undo");
+      undo.addEventListener("click", () => { said.value = before; dictated = null; rewriteNote.hidden = true; said.style.height = "auto"; said.style.height = `${Math.min(said.scrollHeight, 320)}px`; followWords(); });
+      rewriteNote.replaceChildren(`Rewritten: ${changes.length ? changes.slice(0, 6).map((c) => `${c.from} → ${c.to}`).join("; ") : "the dictation fixed"}.`, undo);
+      rewriteNote.hidden = false;
+    } catch (err) {
+      if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
+      else status(`Not rewritten (${why(err)}).  Your words are as you wrote them.`, "warn", 8000);
+    } finally { rewriteBtn.disabled = holds > 0; rewriteBtn.textContent = "Rewrite"; }
+  });
 
   // the plus: Camera (straight to the camera) and Attachments (the phone's own menu: the library, a photo, any file)
   const openSheet = (open) => { sheet.hidden = !open; plus.setAttribute("aria-expanded", String(open)); plus.textContent = open ? "×" : "+"; };
@@ -588,8 +650,9 @@ pages.record = async function () {
     } else { img.hidden = true; img.removeAttribute("src"); }
     $("attached-name").textContent = `${f.name || "file"} · ${megabytes(f.size)} · whole`;
     // a picture may be a page of the log (push brief 15c): the box shows for pictures, ticked when the words say so
+    // (log, page, workout, as whole words) and following the words as they change until he sets it by hand
     const pageBox = $("is-page");
-    if (pageBox) { pageBox.parentElement.hidden = !attachment.media_type.startsWith("image/"); pageBox.checked = attachment.media_type.startsWith("image/") && /\b(log|page|push|pull|legs?|lower|upper|workout|lift)/i.test(said.value); }
+    if (pageBox) { pageBox.parentElement.hidden = !attachment.media_type.startsWith("image/"); pageTouched = false; followWords(); }
     $("attached").hidden = false;
   }
   function dropAttachment() {
@@ -598,7 +661,7 @@ pages.record = async function () {
     thumbUrl = null;
     const img = $("thumb"); img.hidden = true; img.removeAttribute("src");
     $("attached").hidden = true;
-    const pageBox = $("is-page"); if (pageBox) { pageBox.checked = false; pageBox.parentElement.hidden = true; }
+    const pageBox = $("is-page"); if (pageBox) { pageBox.checked = false; pageBox.parentElement.hidden = true; pageTouched = false; }
   }
 
   form.addEventListener("submit", async (e) => {
@@ -610,8 +673,9 @@ pages.record = async function () {
     if (timeTouched && when.value) args.happened_at = new Date(when.value).toISOString();
     if (attachment) args.attachment = attachment;
     if (attachment && $("is-page")?.checked) args.shape.page = "workout";   // the reader wakes on it; the table lands under Pages to check
+    if (dictated && words && dictated !== words) { args.shape.as_dictated = dictated; args.shape.rewritten = true; }   // the record keeps both: his dictation and the rewrite he logged
     const btn = $("record-btn"); hold(true); plus.disabled = true; btn.textContent = attachment ? "Sending the file…" : "Recording…";
-    const clear = () => { said.value = ""; said.style.height = ""; dropAttachment(); setNow(); };
+    const clear = () => { said.value = ""; said.style.height = ""; dictated = null; if (rewriteNote) rewriteNote.hidden = true; dropAttachment(); setNow(); };
     let kept = null, recorded = false, pulse = null;
     try {
       kept = await pending.add({ args }, true);   // on the phone before it travels: a send cut short loses nothing
@@ -661,23 +725,32 @@ pages.record = async function () {
   // Pages to check (push brief 15c): each unchecked page, its picture on top and the reader's table under it, every
   // cell his to change; Record writes the workout citing the page and marks the reading checked.  A set is one box,
   // "weight x reps", with A for assisted and w for a warm-up ("180x12w", "90x8A"); ? stays ? until he fixes it.
-  async function renderPages() {
+  // A redraw while he is fixing a cell, or while a page's Record is on its way, would throw his edits away or show
+  // the card again, enabled (the review's 1.4): the list is left alone then, and drawn on the next call.
+  async function renderPages(force = false) {
     const box = $("pages"), list = $("pages-list"); if (!box || !list) return;
+    if (!force && (pagesBusy || list.contains(document.activeElement))) return;
     let pages = [];
-    try { pages = await call("pages", { status: "unchecked", limit: 10 }); } catch { return; }
-    if (!Array.isArray(pages) || pages.length === 0) { box.hidden = true; list.replaceChildren(); return; }
+    try { pages = await call("pages", { status: "all", limit: 20 }); } catch { return; }
+    if (!force && (pagesBusy || list.contains(document.activeElement))) return;   // the call took a while; he may have started on a cell
+    // unchecked pages, and pages the reader could not read (tried): the table is his to type
+    pages = Array.isArray(pages) ? pages.filter((p) => p.reading && p.reading.status !== "checked") : [];
+    if (pages.length === 0) { box.hidden = true; list.replaceChildren(); return; }
     list.replaceChildren(...pages.map((p) => pageCard(p)));
     box.hidden = false;
   }
   const setText = (s) => `${s.weight ?? "?"}x${s.reps ?? "?"}${s.assisted ? "A" : ""}${s.warm_up ? "w" : ""}`;
+  // A cell is "weight x reps" with A for assisted and w for a warm-up; a ? on either side stays ?.  A cell that is
+  // not of that form goes as it was written, with reps ?, never as the digits picked out of it (the review's 1.1).
   const parseSet = (txt, note) => {
-    const m = String(txt).trim().match(/^([^\sx×]+)\s*[x×]\s*([^\sAaWw]+)\s*([AaWw]*)$/);
+    const m = String(txt).trim().match(/^([^\sx×]+)\s*[x×]\s*([^\sAaWw]*)\s*([AaWw]*)$/);
     if (!m) return null;
     const flags = (m[3] ?? "").toLowerCase();
     return { weight: m[1], reps: m[2], assisted: flags.includes("a"), warm_up: flags.includes("w"), note: note ?? null };
   };
   function pageCard(p) {
     const t = p.reading?.table ?? {};
+    const tried = p.reading?.status === "tried";
     const rows = [];
     const table = el("table", { class: "page-table" },
       el("thead", {}, el("tr", {}, el("th", {}, "exercise"), el("th", {}, "setting"), el("th", {}, "sets"))),
@@ -704,32 +777,38 @@ pages.record = async function () {
     const addEx = el("button", { type: "button", class: "ghost small", onclick: () => addRow() }, "+ exercise");
     const card = el("article", { class: "page", "data-source": p.source },
       p.url ? el("a", { href: p.url, target: "_blank", rel: "noopener" }, el("img", { src: p.url, class: "page-picture", alt: p.file ?? p.title ?? "the page" })) : el("p", { class: "meta" }, "the picture could not be fetched; the table stands"),
-      el("p", { class: "meta" }, `${p.file ?? p.title ?? "page"} · recorded ${p.happened_at ? fmtStamp(p.happened_at) : fmtStamp(p.captured_at)} · read ${p.reading?.read_at ? relative(p.reading.read_at) : ""}`),
+      el("p", { class: "meta" }, `${p.file ?? p.title ?? "page"} · recorded ${p.happened_at ? fmtStamp(p.happened_at) : fmtStamp(p.captured_at)} · ${tried ? "the reader could not read it" : `read ${p.reading?.read_at ? relative(p.reading.read_at) : ""}`}`),
+      tried ? el("p", { class: "unclear page-unclear" }, `The reader could not read this page${p.reading?.error ? ` (${short(String(p.reading.error), 120)})` : ""}.  Type the table from the picture, then Record.`) : null,
       el("div", { class: "row page-head" }, el("label", { class: "field" }, el("span", {}, "workout"), workout), el("label", { class: "field" }, el("span", {}, "date"), date), el("label", { class: "field" }, el("span", {}, "time"), time)),
       table, addEx,
       t.unclear ? el("p", { class: "unclear page-unclear" }, t.unclear) : null,
       el("div", { class: "row" }, btn),
     );
+    if (tried && !(t.exercises ?? []).length) addRow();
     btn.addEventListener("click", async () => {
       const exercises = [];
       for (const r of rows) {
         const nm = r.name.value.trim(); if (!nm) continue;
-        const sets = [...r.sets.querySelectorAll("input")].map((i) => i.value.trim()).filter(Boolean).map((v, i2, arr) => parseSet(v, r.sets.querySelectorAll("input")[i2]?.dataset.note || null) ?? { weight: v, reps: "?", assisted: false, warm_up: i2 === 0 && arr.length > 1, note: "could not be read as weight x reps" });
+        // the cells with their notes first, then the blanks left out, so a note stays with its own set (the review's 1.18)
+        const cells = [...r.sets.querySelectorAll("input")].map((i) => ({ v: i.value.trim(), note: i.dataset.note || null })).filter((c) => c.v);
+        const sets = cells.map((c, i2) => parseSet(c.v, c.note) ?? { weight: c.v, reps: "?", assisted: false, warm_up: i2 === 0 && cells.length > 1, note: `as written: ${c.v}` });
         exercises.push({ name: nm, setting: r.setting.value.trim() || null, sets, unclear: null });
       }
       if (!exercises.length) { status("Nothing to record: the table has no exercise.", "warn", 5000); return; }
       const open = exercises.flatMap((e) => e.sets).filter((s) => /\?/.test(`${s.weight}${s.reps}`)).length + exercises.filter((e) => e.name === "?").length;
-      if (open && !confirm(`${open} cell${open === 1 ? "" : "s"} still read ?.  Record as it stands?`)) return;
-      btn.disabled = true;
+      if (open && !confirm(`${open} cell${open === 1 ? "" : "s"} still read ?.  They go on the record as ?.  Record as it stands?`)) return;
+      btn.disabled = true; pagesBusy = true;
       try {
         const out = await call("record_page", { source: p.source, table: { workout: workout.value.trim() || null, date: date.value || null, time: time.value || null, exercises, unclear: t.unclear ?? null } });
-        status(`Recorded: ${short(out?.said ?? "the workout", 80)}`, "ok", 6000);
-        await renderPages();
+        status(`Recorded: ${short(out?.said ?? "the workout", 80)}${out?.unread ? `  (${plural(out.unread, "cell")} as ?)` : ""}`, "ok", 6000);
+        pagesBusy = false;
+        await renderPages(true);
         await renderLog(true);
       } catch (err) {
+        pagesBusy = false;
         if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
-        else status(`Not recorded: ${why(err)}`, "warn", 8000);
-        btn.disabled = false;
+        else if (/already recorded/.test(String(err?.message ?? err))) { status("This page is already on the record.", "ok", 6000); await renderPages(true); }
+        else { status(`Not recorded: ${why(err)}`, "warn", 8000); btn.disabled = false; }
       }
     });
     return card;
@@ -869,11 +948,14 @@ pages.thoughts = async function () {
   next.addEventListener("click", async () => {
     next.disabled = true; next.textContent = "Sitting…";
     try {
-      await call("sit", { why: "asked from the phone, Next on Thoughts" });
-      status("The Thinker is sitting.  Its line lands here within a few minutes.", "ok", 8000);
+      // the sitting shown now, read fresh, so the first poll cannot take the old one for the new (the review's 1.18)
+      if (current === null) { try { const t0 = await call("today"); current = t0.sitting?.id ?? null; renderSitting(sitBox, t0.sitting, true); } catch { /* the poll below reads again */ } }
+      const before = current;
+      const sat = await call("sit", { why: "asked from the phone, Next on Thoughts" });
+      status(sat?.already ? "A sitting is already on its way; its line lands here within a few minutes." : "The Thinker is sitting.  Its line lands here within a few minutes.", "ok", 8000);
       const began = Date.now();
       const poll = setInterval(async () => {
-        try { const t = await call("today"); if (t.sitting?.id && t.sitting.id !== current) { clearInterval(poll); current = t.sitting.id; renderSitting(sitBox, t.sitting, true); next.disabled = false; next.textContent = "Next"; status("The sitting is here.", "ok", 4000); } }
+        try { const t = await call("today"); if (t.sitting?.id && t.sitting.id !== before) { clearInterval(poll); current = t.sitting.id; renderSitting(sitBox, t.sitting, true); next.disabled = false; next.textContent = "Next"; status("The sitting is here.", "ok", 4000); } }
         catch { /* the next tick looks again */ }
         if (Date.now() - began > 6 * 60000) { clearInterval(poll); next.disabled = false; next.textContent = "Next"; status("No line yet; it may be held back by the day's cap.  Look again later.", "warn", 8000); }
       }, 10000);
@@ -917,7 +999,9 @@ pages.thoughts = async function () {
         el("span", { class: "area-name" }, name[0].toUpperCase() + name.slice(1)),
         el("span", { class: `area-score${score === null ? " none" : ""}` }, score === null ? "–" : String(score)),
       );
-      const line = a ? el("p", { class: "meta" }, `today ${a.today?.read ? `${a.today.met} of ${a.today.read}` : "nothing read yet"} · seven days ${a.week?.read ? `${a.week.met} of ${a.week.read}` : "–"} · twenty-eight days ${a.month?.read ? `${a.month.met} of ${a.month.read}` : "–"}${a.own ? ` · yours ${a.own.number}` : ""}`)
+      // the day named is the day scored, which is the last day closed, not today (the review's 1.16)
+      const scored = a?.day ? fmtDay(`${a.day}T12:00:00`) : "the last day";
+      const line = a ? el("p", { class: "meta" }, `${scored} ${a.today?.read ? `${a.today.met} of ${a.today.read}` : "nothing read"} · seven days ${a.week?.read ? `${a.week.met} of ${a.week.read}` : "–"} · twenty-eight days ${a.month?.read ? `${a.month.met} of ${a.month.read}` : "–"}${a.own ? ` · yours ${a.own.number}` : ""}`)
         : el("p", { class: "meta" }, "no parts on the record yet");
       const trend = a?.days?.length ? el("div", { class: "trend", title: "fourteen days" }, a.days.map((d) => el("span", { class: `bar${d.read ? "" : " empty"}`, style: `height:${d.read ? Math.max(8, Math.round(100 * d.met / d.read)) : 4}%`, title: `${d.day}: ${d.read ? `${d.met} of ${d.read}` : "nothing read"}` }))) : null;
       const parts = a?.parts?.length ? el("details", { class: "bubble" }, el("summary", {}, el("span", { class: "count" }, `${a.parts.length} part${a.parts.length === 1 ? "" : "s"} today`)), el("ul", {}, a.parts.map((p) => el("li", { class: p.reading }, `${p.words} · ${p.reading}`)))) : null;
