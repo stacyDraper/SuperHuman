@@ -21,7 +21,7 @@ HEAD = """<!doctype html>
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=20261126d">
+  <link rel="stylesheet" href="./styles.css?v=20261126e">
 </head>
 <body data-page="{page}">
   <header class="top">
@@ -47,13 +47,14 @@ HEAD = """<!doctype html>
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261126d"></script>
+  <script src="./app.js?v=20261126e"></script>
 </body>
 </html>
 """
 
 PAGES = {
     "today.html": dict(page="today", title="when fire · today", heading="Today", main="""
+    <section id="sitting" class="sitting" hidden></section>
     <p class="lead"><span id="today-date"></span>.  What falls today, in clock order, in three stretches.  Under a check-in, one tap records the stretch as planned; a step you didn't do, leave alone.</p>
     <div id="routines"></div>
     <p id="today-empty" class="empty" hidden>No routine on your side of the record yet.  A routine is a bundle of whens, asserted with your yes.</p>
@@ -88,6 +89,7 @@ PAGES = {
             <img id="thumb" class="thumb" alt="the picture to record" hidden>
             <span id="attached-name" class="attached-name"></span>
             <button id="clear-attachment" type="button" class="link">remove</button>
+            <label class="toggle small page-toggle"><input id="is-page" type="checkbox"> a page of the log: read it into a table for me to check</label>
           </div>
         </div>
         <button id="record-btn" type="submit" class="primary big">Record</button>
@@ -97,6 +99,11 @@ PAGES = {
         <ul id="pending-list"></ul>
         <button id="retry" type="button" class="ghost">Send now</button>
       </section>
+    </section>
+    <section id="pages" class="pages" hidden aria-labelledby="pages-h">
+      <h2 id="pages-h">Pages to check</h2>
+      <p class="hint">The reader's table under each picture.  Fix any cell (a ? is one it could not read), then Record: the workout goes on the record citing the page, and the session reads met.</p>
+      <div id="pages-list"></div>
     </section>
     <section class="log-section" aria-labelledby="recent-h">
       <h2 id="recent-h">Recent</h2>
@@ -112,11 +119,21 @@ PAGES = {
     <p id="whens-empty" class="empty" hidden>No whens on your side of the record.</p>
 """),
     "thoughts.html": dict(page="thoughts", title="when fire · thoughts", heading="Thoughts", main="""
-    <p class="lead">What stands now, written by the Reconciler when an episode or a day closes.  The asserted beside the recorded; no grades.</p>
-    <label class="toggle"><input id="show-notes" type="checkbox"> also the Thinker's notes</label>
-    <div id="thoughts"></div>
-    <p id="thoughts-empty" class="empty" hidden>Nothing written yet.</p>
-    <button id="thoughts-more" type="button" class="ghost more" hidden>Earlier</button>
+    <section id="sitting-full" class="sitting full" aria-labelledby="sitting-h">
+      <div class="row between"><h2 id="sitting-h">The sitting</h2><button id="next-sitting" type="button" class="small ghost">Next</button></div>
+      <div id="sitting-body"><p class="empty">The Thinker sits Wednesday night.  Next asks for one now.</p></div>
+    </section>
+    <section id="areas" class="areas" aria-labelledby="areas-h">
+      <h2 id="areas-h">The eight areas</h2>
+      <p class="hint">Consistency, not results: of the parts read in an area (your steps, met or silence), how many were met.  The row of numbers under each is yours: how it feels, 1 to 10.</p>
+      <div id="areas-list"></div>
+    </section>
+    <details class="fold" data-fold="week">
+      <summary><h2>The week and the days</h2><span id="gist-week" class="gist"></span></summary>
+      <p class="hint">As the Reconciler wrote them: the asserted beside the recorded, no grades.</p>
+      <div id="thoughts"></div>
+      <p id="thoughts-empty" class="empty" hidden>Nothing written yet.</p>
+    </details>
 """),
     "questions.html": dict(page="questions", title="when fire · questions", heading="Questions", main="""
     <section>
