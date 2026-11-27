@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icon-512.png">
   <link rel="icon" href="./icon-512.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=20261126d">
+  <link rel="stylesheet" href="./styles.css?v=20261126e">
 </head>
 <body data-page="record">
   <header class="top">
@@ -54,6 +54,7 @@
             <img id="thumb" class="thumb" alt="the picture to record" hidden>
             <span id="attached-name" class="attached-name"></span>
             <button id="clear-attachment" type="button" class="link">remove</button>
+            <label class="toggle small page-toggle"><input id="is-page" type="checkbox"> a page of the log: read it into a table for me to check</label>
           </div>
         </div>
         <button id="record-btn" type="submit" class="primary big">Record</button>
@@ -63,6 +64,11 @@
         <ul id="pending-list"></ul>
         <button id="retry" type="button" class="ghost">Send now</button>
       </section>
+    </section>
+    <section id="pages" class="pages" hidden aria-labelledby="pages-h">
+      <h2 id="pages-h">Pages to check</h2>
+      <p class="hint">The reader's table under each picture.  Fix any cell (a ? is one it could not read), then Record: the workout goes on the record citing the page, and the session reads met.</p>
+      <div id="pages-list"></div>
     </section>
     <section class="log-section" aria-labelledby="recent-h">
       <h2 id="recent-h">Recent</h2>
@@ -80,6 +86,6 @@
     <a href="./questions.html" data-page="questions"><span class="glyph">?</span>Questions</a>
     <a href="./settings.html" data-page="settings"><span class="glyph">⚙</span>Settings</a>
   </nav>
-  <script src="./app.js?v=20261126d"></script>
+  <script src="./app.js?v=20261126e"></script>
 </body>
 </html>

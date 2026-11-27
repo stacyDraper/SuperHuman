@@ -1,5 +1,8 @@
 // when fire, the web client.  Sunday, October 25, 2026; the Today page and notifications, Monday, October 26; the day as
 // one list with three check-ins, one Done and a note box on every step, caps in Settings, last time, an Undo on every done step, and Settings in folds, Thursday, November 26.
+// The evening of November 26, the push: the Thinker's sitting at the top of Today and whole on Thoughts with Next; the
+// eight areas on Thoughts with his own number; the Thinker's notes and the questions off the page; last night's steps
+// in dusk on Today; a page of the log read into a table under Pages to check on Record, his to fix and record.
 // Several pages, one navigation (a bar at the top of every page), one door: every page talks to the connector with the same verbs any AI uses.
 // The key rides on the page's address once (?token=...), then lives in this browser's storage.
 // Pages: today, record (index), whens, thoughts, questions, settings.  The body's data-page says which one this is.
@@ -345,6 +348,7 @@ pages.today = async function () {
     try {
       const t = await call("today");
       day = t.day ?? todayKey(); yday = dayBefore(day);
+      renderSitting($("sitting"), t.sitting, false);
       const all = (t.whens ?? []).map((w) => ({ ...w, on: day }));
       const checkins = all.filter((w) => w.shape?.checkin && w.falls_today).sort((a, b) => (a.at ?? "").localeCompare(b.at ?? ""));
       const steps = all.filter((w) => !w.shape?.checkin && w.falls_today);
@@ -509,6 +513,30 @@ pages.today = async function () {
   }
 };
 
+// The Thinker's sitting (push brief 15a, November 26, 2026): one line a week, the one move in one area that lifts the
+// most in the others, with the date it was first said.  At the top of Today the line alone, the rest a tap away; on
+// Thoughts the whole of it: the chain, the why with what it drew on, the two runners-up, the page from the shelf.
+function renderSitting(box, s, full) {
+  if (!box) return;
+  if (!s || !s.line) { box.hidden = !full; if (full) box.replaceChildren(el("p", { class: "empty" }, "No sitting yet.  The Thinker sits Wednesday night; Next asks for one now.")); return; }
+  const said = s.first_said ?? s.said_at;
+  const areas = Array.isArray(s.areas) && s.areas.length ? el("p", { class: "meta areas-touched" }, s.areas.join(" · ")) : null;
+  const more = el("div", { class: "sitting-more" },
+    s.chain ? el("p", { class: "chain" }, el("span", { class: "k" }, "the chain: "), s.chain) : null,
+    s.why ? el("p", { class: "why" }, el("span", { class: "k" }, "why: "), s.why) : null,
+    Array.isArray(s.runners_up) && s.runners_up.length ? el("div", { class: "runners" }, el("p", { class: "k" }, "runners-up"), el("ol", {}, s.runners_up.map((r) => el("li", {}, r.line, r.why ? el("span", { class: "meta" }, ` ${r.why}`) : null)))) : null,
+    s.cue ? el("p", { class: "meta" }, el("span", { class: "k" }, "the page from the shelf: "), s.page?.title ? `${s.page.title}.  ` : "", s.cue) : null,
+  );
+  box.replaceChildren(
+    full ? null : el("p", { class: "k small" }, "the sitting"),
+    el("p", { class: "line" }, s.line),
+    el("p", { class: "meta" }, `first said ${said ? fmtStamp(said) : ""}${s.by_hand ? ", asked by hand" : ""}`),
+    areas,
+    full ? more : el("details", { class: "bubble" }, el("summary", {}, el("span", { class: "count" }, "the why")), more),
+  );
+  box.hidden = false;
+}
+
 // Record: what happened, in the person's words, with the time it happened first.  The recent log below, paged.
 pages.record = async function () {
   const form = $("record-form"), said = $("said"), when = $("happened"), sheet = $("attach-sheet"), plus = $("plus");
@@ -559,6 +587,9 @@ pages.record = async function () {
       img.src = thumbUrl; img.hidden = false;
     } else { img.hidden = true; img.removeAttribute("src"); }
     $("attached-name").textContent = `${f.name || "file"} · ${megabytes(f.size)} · whole`;
+    // a picture may be a page of the log (push brief 15c): the box shows for pictures, ticked when the words say so
+    const pageBox = $("is-page");
+    if (pageBox) { pageBox.parentElement.hidden = !attachment.media_type.startsWith("image/"); pageBox.checked = attachment.media_type.startsWith("image/") && /\b(log|page|push|pull|legs?|lower|upper|workout|lift)/i.test(said.value); }
     $("attached").hidden = false;
   }
   function dropAttachment() {
@@ -567,6 +598,7 @@ pages.record = async function () {
     thumbUrl = null;
     const img = $("thumb"); img.hidden = true; img.removeAttribute("src");
     $("attached").hidden = true;
+    const pageBox = $("is-page"); if (pageBox) { pageBox.checked = false; pageBox.parentElement.hidden = true; }
   }
 
   form.addEventListener("submit", async (e) => {
@@ -577,6 +609,7 @@ pages.record = async function () {
     const args = { said: words || (attachment?.media_type.startsWith("image/") ? "(picture)" : `(${attachment?.title ?? "file"})`), shape: { via: "when_fire_web", entry: entryId() } };
     if (timeTouched && when.value) args.happened_at = new Date(when.value).toISOString();
     if (attachment) args.attachment = attachment;
+    if (attachment && $("is-page")?.checked) args.shape.page = "workout";   // the reader wakes on it; the table lands under Pages to check
     const btn = $("record-btn"); hold(true); plus.disabled = true; btn.textContent = attachment ? "Sending the file…" : "Recording…";
     const clear = () => { said.value = ""; said.style.height = ""; dropAttachment(); setNow(); };
     let kept = null, recorded = false, pulse = null;
@@ -587,9 +620,10 @@ pages.record = async function () {
       if (!out?.fact) throw new Error("the record gave no receipt");
       recorded = true;
       if (kept) await pending.remove(kept);
-      status(args.happened_at ? `Recorded, as of ${fmtStamp(args.happened_at)}.` : "Recorded.", "ok");
+      status(args.shape.page ? "Recorded.  The reader is on the page; its table lands under Pages to check in a minute." : args.happened_at ? `Recorded, as of ${fmtStamp(args.happened_at)}.` : "Recorded.", "ok", args.shape.page ? 8000 : 3600);
       clear();
       await renderLog(true);
+      if (args.shape.page) { setTimeout(() => renderPages(), 45000); setTimeout(() => renderPages(), 120000); }
     } catch (err) {
       const key = needKey(err);
       if (recorded) { /* the fact is on the record; what stumbled came after it */ }
@@ -621,7 +655,85 @@ pages.record = async function () {
   $("log-more").addEventListener("click", async () => { shown += 20; await renderLog(false, true); });
   renderPending();
   await renderLog();
+  renderPages();
   sendKept(false);
+
+  // Pages to check (push brief 15c): each unchecked page, its picture on top and the reader's table under it, every
+  // cell his to change; Record writes the workout citing the page and marks the reading checked.  A set is one box,
+  // "weight x reps", with A for assisted and w for a warm-up ("180x12w", "90x8A"); ? stays ? until he fixes it.
+  async function renderPages() {
+    const box = $("pages"), list = $("pages-list"); if (!box || !list) return;
+    let pages = [];
+    try { pages = await call("pages", { status: "unchecked", limit: 10 }); } catch { return; }
+    if (!Array.isArray(pages) || pages.length === 0) { box.hidden = true; list.replaceChildren(); return; }
+    list.replaceChildren(...pages.map((p) => pageCard(p)));
+    box.hidden = false;
+  }
+  const setText = (s) => `${s.weight ?? "?"}x${s.reps ?? "?"}${s.assisted ? "A" : ""}${s.warm_up ? "w" : ""}`;
+  const parseSet = (txt, note) => {
+    const m = String(txt).trim().match(/^([^\sx×]+)\s*[x×]\s*([^\sAaWw]+)\s*([AaWw]*)$/);
+    if (!m) return null;
+    const flags = (m[3] ?? "").toLowerCase();
+    return { weight: m[1], reps: m[2], assisted: flags.includes("a"), warm_up: flags.includes("w"), note: note ?? null };
+  };
+  function pageCard(p) {
+    const t = p.reading?.table ?? {};
+    const rows = [];
+    const table = el("table", { class: "page-table" },
+      el("thead", {}, el("tr", {}, el("th", {}, "exercise"), el("th", {}, "setting"), el("th", {}, "sets"))),
+      el("tbody", {}));
+    const addRow = (e = { name: "", setting: null, sets: [] }) => {
+      const name = el("input", { type: "text", value: e.name ?? "", class: e.name === "?" ? "unread" : "", placeholder: "exercise" });
+      const setting = el("input", { type: "text", value: e.setting ?? "", class: "narrow", placeholder: "–" });
+      const sets = el("div", { class: "sets" });
+      const addSet = (s = { weight: "?", reps: "?", assisted: false, warm_up: false, note: null }) => {
+        const inp = el("input", { type: "text", value: setText(s), class: `set${/\?/.test(setText(s)) ? " unread" : ""}`, title: s.note ?? "", "data-note": s.note ?? "" });
+        sets.append(inp);
+      };
+      (e.sets ?? []).forEach(addSet);
+      const plus = el("button", { type: "button", class: "link tiny", onclick: () => { addSet({ weight: "", reps: "", assisted: false, warm_up: false, note: null }); sets.lastElementChild.focus(); } }, "+ set");
+      const tr = el("tr", {}, el("td", {}, name, e.unclear ? el("p", { class: "unclear" }, e.unclear) : null), el("td", {}, setting), el("td", {}, sets, plus));
+      table.querySelector("tbody").append(tr);
+      rows.push({ name, setting, sets });
+    };
+    (t.exercises ?? []).forEach(addRow);
+    const workout = el("input", { type: "text", value: t.workout ?? "", placeholder: "push, pull, legs…", class: "narrow" });
+    const date = el("input", { type: "date", value: /^\d{4}-\d{2}-\d{2}$/.test(t.date ?? "") ? t.date : (p.happened_at ? dayKey(p.happened_at) : todayKey()) });
+    const time = el("input", { type: "time", value: t.time ?? "" });
+    const btn = el("button", { type: "button", class: "primary small" }, "Record");
+    const addEx = el("button", { type: "button", class: "ghost small", onclick: () => addRow() }, "+ exercise");
+    const card = el("article", { class: "page", "data-source": p.source },
+      p.url ? el("a", { href: p.url, target: "_blank", rel: "noopener" }, el("img", { src: p.url, class: "page-picture", alt: p.file ?? p.title ?? "the page" })) : el("p", { class: "meta" }, "the picture could not be fetched; the table stands"),
+      el("p", { class: "meta" }, `${p.file ?? p.title ?? "page"} · recorded ${p.happened_at ? fmtStamp(p.happened_at) : fmtStamp(p.captured_at)} · read ${p.reading?.read_at ? relative(p.reading.read_at) : ""}`),
+      el("div", { class: "row page-head" }, el("label", { class: "field" }, el("span", {}, "workout"), workout), el("label", { class: "field" }, el("span", {}, "date"), date), el("label", { class: "field" }, el("span", {}, "time"), time)),
+      table, addEx,
+      t.unclear ? el("p", { class: "unclear page-unclear" }, t.unclear) : null,
+      el("div", { class: "row" }, btn),
+    );
+    btn.addEventListener("click", async () => {
+      const exercises = [];
+      for (const r of rows) {
+        const nm = r.name.value.trim(); if (!nm) continue;
+        const sets = [...r.sets.querySelectorAll("input")].map((i) => i.value.trim()).filter(Boolean).map((v, i2, arr) => parseSet(v, r.sets.querySelectorAll("input")[i2]?.dataset.note || null) ?? { weight: v, reps: "?", assisted: false, warm_up: i2 === 0 && arr.length > 1, note: "could not be read as weight x reps" });
+        exercises.push({ name: nm, setting: r.setting.value.trim() || null, sets, unclear: null });
+      }
+      if (!exercises.length) { status("Nothing to record: the table has no exercise.", "warn", 5000); return; }
+      const open = exercises.flatMap((e) => e.sets).filter((s) => /\?/.test(`${s.weight}${s.reps}`)).length + exercises.filter((e) => e.name === "?").length;
+      if (open && !confirm(`${open} cell${open === 1 ? "" : "s"} still read ?.  Record as it stands?`)) return;
+      btn.disabled = true;
+      try {
+        const out = await call("record_page", { source: p.source, table: { workout: workout.value.trim() || null, date: date.value || null, time: time.value || null, exercises, unclear: t.unclear ?? null } });
+        status(`Recorded: ${short(out?.said ?? "the workout", 80)}`, "ok", 6000);
+        await renderPages();
+        await renderLog(true);
+      } catch (err) {
+        if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0);
+        else status(`Not recorded: ${why(err)}`, "warn", 8000);
+        btn.disabled = false;
+      }
+    });
+    return card;
+  }
 
   async function renderPending() {
     try {
@@ -742,42 +854,88 @@ pages.whens = async function () {
   }
 };
 
-// Thoughts: what stands now, written by the Reconciler, and the Thinker's own notes.
+// Thoughts.  Since the push of November 26, 2026 (Stacy, 8:08 PM: "The thinker and the questions are all noise to
+// me"): the Thinker's sitting, whole, with Next; the eight areas scored for consistency, each with its parts and the
+// row for his own number; and the week and the days as the Reconciler wrote them, folded.  The Thinker's old notes
+// and the questions stay on the record and off the page.
+const AREAS = ["emotional", "physical", "social", "spiritual", "intellectual", "occupational", "financial", "environmental"];
 pages.thoughts = async function () {
-  const list = $("thoughts"), toggle = $("show-notes"), moreBtn = $("thoughts-more");
-  let windowDays = 7, shown = 12;
-  toggle.checked = store.get("wf_show_notes") === "1";
-  toggle.addEventListener("change", () => { store.set("wf_show_notes", toggle.checked ? "1" : "0"); render(true); });
-  moreBtn.addEventListener("click", async () => { shown += 12; if (shown > 24) windowDays = Math.min(windowDays * 3, 120); await render(false, true); });
-  await render();
-  async function render(fresh = false, more = false) {
+  const list = $("thoughts"), areasBox = $("areas-list"), sitBox = $("sitting-body"), next = $("next-sitting");
+  for (const d of document.querySelectorAll("details.fold")) {
+    d.open = store.get(`wf_fold_${d.dataset.fold}`) === "1";
+    d.addEventListener("toggle", () => store.set(`wf_fold_${d.dataset.fold}`, d.open ? "1" : null));
+  }
+  let current = null;   // the sitting shown, by id
+  next.addEventListener("click", async () => {
+    next.disabled = true; next.textContent = "Sitting…";
     try {
-      const rec = await readRecord({ since: hoursAgo(24 * windowDays), limit: "all", notes: toggle.checked, fires: false, include_inactive: true }, fresh);
-      const byId = new Map(rec.whens.map((w) => [w.id, w]));
-      const items = [];
-      for (const s of rec.snapshots ?? []) items.push({ at: s.written_at, kind: s.subject_kind, s });
-      if (toggle.checked) for (const f of rec.facts.filter((f) => isNote(f) && !/^error:/.test(f.said_by) && ["thinker", "claude", "ai"].includes(f.said_by))) items.push({ at: f.recorded_at, kind: "note", f });
-      items.sort((a, b) => (a.at < b.at ? 1 : -1));
-      // the latest week's review stands first, whatever was written since
-      const week = items.find((it) => it.kind === "week");
+      await call("sit", { why: "asked from the phone, Next on Thoughts" });
+      status("The Thinker is sitting.  Its line lands here within a few minutes.", "ok", 8000);
+      const began = Date.now();
+      const poll = setInterval(async () => {
+        try { const t = await call("today"); if (t.sitting?.id && t.sitting.id !== current) { clearInterval(poll); current = t.sitting.id; renderSitting(sitBox, t.sitting, true); next.disabled = false; next.textContent = "Next"; status("The sitting is here.", "ok", 4000); } }
+        catch { /* the next tick looks again */ }
+        if (Date.now() - began > 6 * 60000) { clearInterval(poll); next.disabled = false; next.textContent = "Next"; status("No line yet; it may be held back by the day's cap.  Look again later.", "warn", 8000); }
+      }, 10000);
+    } catch (err) {
+      if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0); else status(`Not asked: ${why(err)}`, "warn", 8000);
+      next.disabled = false; next.textContent = "Next";
+    }
+  });
+  await render();
+  async function render(fresh = false) {
+    try {
+      const t = await call("today");
+      current = t.sitting?.id ?? null;
+      renderSitting(sitBox, t.sitting, true);
+      renderAreas(t.areas ?? []);
+    } catch (err) { if (!needKey(err)) status(`The record did not answer: ${err.message}`, "warn", 6000); }
+    try {
+      const rec = await readRecord({ since: hoursAgo(24 * 8), limit: "all", notes: false, fires: false }, fresh);
+      const items = (rec.snapshots ?? []).filter((s) => s.subject_kind === "week" || s.subject_kind === "day").sort((a, b) => (a.written_at < b.written_at ? 1 : -1));
+      const week = items.find((it) => it.subject_kind === "week");
       if (week) { items.splice(items.indexOf(week), 1); items.unshift(week); }
-      const page = items.slice(0, shown);
-      list.replaceChildren(...page.map((it) => {
-        if (it.kind === "note") return el("article", { class: "thought note" }, el("h3", {}, `${it.f.said_by}, ${fmtStamp(it.f.recorded_at)}`), el("p", {}, it.f.said));
-        const s = it.s;
+      const gist = $("gist-week"); if (gist) gist.textContent = week ? `week to ${fmtDay(week.shape?.to ? `${week.shape.to}T12:00:00` : week.watermark)}` : `${items.length} day${items.length === 1 ? "" : "s"}`;
+      list.replaceChildren(...items.slice(0, 9).map((s) => {
         const [main, ...rest] = s.says.split("\n\n");
-        const title = s.subject_kind === "week" ? `The week, to ${fmtDayLong(s.shape?.to ? `${s.shape.to}T12:00:00` : s.watermark)}`
-          : s.subject_kind === "day" ? `The day, ${fmtDayLong(s.shape?.day ? `${s.shape.day}T12:00:00` : s.watermark)}`
-          : s.subject_kind === "episode" ? `Episode, ${fmtStamp(s.watermark)}`
-          : s.subject_kind === "when" ? `When: ${firstWords(byId.get(s.subject_id)?.words ?? "(an earlier wording)", 8)}`
-          : `${s.subject_kind}`;
+        const title = s.subject_kind === "week" ? `The week, to ${fmtDayLong(s.shape?.to ? `${s.shape.to}T12:00:00` : s.watermark)}` : `The day, ${fmtDayLong(s.shape?.day ? `${s.shape.day}T12:00:00` : s.watermark)}`;
         return el("article", { class: `thought ${s.subject_kind}` }, el("h3", {}, title), el("p", {}, main), rest.length ? el("p", { class: "footnote" }, rest.join("  ")) : null,
           el("p", { class: "meta" }, `as of ${fmtStamp(s.watermark)} · written ${relative(s.written_at)} by ${s.written_by}`));
       }));
       $("thoughts-empty").hidden = items.length > 0;
-      moreBtn.hidden = items.length <= shown && windowDays >= 120;
-      if (more) moreBtn.scrollIntoView({ block: "nearest" });
     } catch (err) { if (!needKey(err)) status(`The record did not answer: ${err.message}`, "warn", 6000); }
+  }
+  // The eight areas (push brief 15b).  A number is met parts over read parts, in hundredths; no parts read is no
+  // reading, not zero.  Under each, the fourteen-day trend as bars, the parts of the day with their readings, and the
+  // row of 1 to 10 for his own number, which goes on the record as a fact in his words.
+  function renderAreas(areas) {
+    const byName = new Map(areas.map((a) => [a.area, a]));
+    areasBox.replaceChildren(...AREAS.map((name) => {
+      const a = byName.get(name);
+      const score = a?.week?.score ?? null;
+      const head = el("div", { class: "area-head" },
+        el("span", { class: "area-name" }, name[0].toUpperCase() + name.slice(1)),
+        el("span", { class: `area-score${score === null ? " none" : ""}` }, score === null ? "–" : String(score)),
+      );
+      const line = a ? el("p", { class: "meta" }, `today ${a.today?.read ? `${a.today.met} of ${a.today.read}` : "nothing read yet"} · seven days ${a.week?.read ? `${a.week.met} of ${a.week.read}` : "–"} · twenty-eight days ${a.month?.read ? `${a.month.met} of ${a.month.read}` : "–"}${a.own ? ` · yours ${a.own.number}` : ""}`)
+        : el("p", { class: "meta" }, "no parts on the record yet");
+      const trend = a?.days?.length ? el("div", { class: "trend", title: "fourteen days" }, a.days.map((d) => el("span", { class: `bar${d.read ? "" : " empty"}`, style: `height:${d.read ? Math.max(8, Math.round(100 * d.met / d.read)) : 4}%`, title: `${d.day}: ${d.read ? `${d.met} of ${d.read}` : "nothing read"}` }))) : null;
+      const parts = a?.parts?.length ? el("details", { class: "bubble" }, el("summary", {}, el("span", { class: "count" }, `${a.parts.length} part${a.parts.length === 1 ? "" : "s"} today`)), el("ul", {}, a.parts.map((p) => el("li", { class: p.reading }, `${p.words} · ${p.reading}`)))) : null;
+      const own = el("div", { class: "own" }, el("span", { class: "k small" }, "yours"), ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
+        const b = el("button", { type: "button", class: `tiny${a?.own?.number === n ? " on" : ""}` }, String(n));
+        b.addEventListener("click", async () => {
+          b.disabled = true;
+          try {
+            await call("record", { said: `${name[0].toUpperCase() + name.slice(1)}: ${n} of 10, how it feels`, shape: { via: "when_fire_web", kind: "area_number", area: name, number: n } });
+            status(`${name}, ${n} of 10, on the record.`, "ok", 4000);
+            own.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+          } catch (err) { if (needKey(err)) status("The key was refused.  Paste the address again.", "warn", 0); else status(`Not recorded: ${why(err)}`, "warn", 6000); }
+          b.disabled = false;
+        });
+        return b;
+      }));
+      return el("article", { class: `area${a ? "" : " quiet"}` }, head, line, trend, parts, own);
+    }));
   }
 };
 

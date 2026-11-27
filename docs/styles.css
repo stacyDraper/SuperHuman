@@ -251,7 +251,6 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .step .body { min-width: 0; }
 .step .step-words { width: 100%; box-sizing: border-box; margin-top: 6px; min-height: 30px; resize: none; font-size: 0.9rem; padding: 4px 8px; background: transparent; border: 1px dashed var(--line); border-radius: 8px; color: var(--ink); }
 .step .step-words:focus { border-style: solid; background: var(--bg); }
-.step.last-night .clock::after { content: " ·"; color: var(--ink-3); }
 .last-time { margin: 24px 0 0; }
 .last-time h2 { font-size: 1rem; color: var(--ink-2); margin: 0 0 8px; }
 .last-time details { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; margin: 0 0 6px; }
@@ -276,3 +275,76 @@ label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .step .bubble[open] .count::after { content: " ⌄"; }
 .step .bubble ul { margin: 8px 0 2px; padding: 8px 12px 8px 26px; background: var(--bg-3); border-radius: 10px; font-size: 0.9rem; color: var(--ink-2); }
 .step .bubble li { margin: 2px 0; }
+
+/* The push of November 26, 2026, evening.  Last night's steps in dusk (Stacy, 8:05 PM: "a gray or a sunset color or
+   something the represents dusk from last night as opposed to dawn today"): a band at the left, a tinted ground, the
+   words "last night" in the dusk's own color.  Today's steps keep the dawn look. */
+:root { --dusk: #6b4c7a; --dusk-2: #c4541f; --dusk-bg: rgba(107, 76, 122, 0.10); }
+@media (prefers-color-scheme: dark) { :root { --dusk: #b48ac7; --dusk-2: #e0683a; --dusk-bg: rgba(180, 138, 199, 0.14); } }
+.step.last-night { background: linear-gradient(90deg, var(--dusk-bg), var(--bg-2) 55%); border-left: 5px solid var(--dusk); border-image: linear-gradient(180deg, var(--dusk), var(--dusk-2)) 1; border-right: 1px solid var(--line); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: var(--radius); }
+.step.last-night .clock { color: var(--dusk); }
+.step.last-night .clock::after { content: " ☾"; color: var(--dusk); }
+.step.last-night .state { color: var(--dusk); }
+
+/* The sitting: the line at the top of Today, the whole on Thoughts. */
+.sitting { margin: 0 0 16px; padding: 14px 16px; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.sitting .k { color: var(--ink-3); font-size: 0.78rem; letter-spacing: 0.02em; text-transform: uppercase; }
+.sitting .line { margin: 4px 0 6px; font-size: 1.08rem; line-height: 1.45; }
+.sitting .meta { margin: 0 0 4px; }
+.sitting .areas-touched { color: var(--ember); }
+.sitting .sitting-more p { margin: 8px 0 0; font-size: 0.95rem; line-height: 1.45; color: var(--ink-2); }
+.sitting .sitting-more .k { text-transform: none; letter-spacing: 0; font-size: 0.95rem; color: var(--ink-3); }
+.sitting .runners ol { margin: 4px 0 0; padding-left: 20px; font-size: 0.92rem; color: var(--ink-2); }
+.sitting .runners li { margin: 4px 0; }
+.sitting .bubble summary { list-style: none; cursor: pointer; margin-top: 4px; }
+.sitting .bubble summary::-webkit-details-marker { display: none; }
+.sitting .bubble .count { color: var(--ink-3); font-size: 0.82rem; }
+.sitting .bubble .count::after { content: " ›"; }
+.sitting .bubble[open] .count::after { content: " ⌄"; }
+.sitting.full h2 { margin: 0; font-size: 1rem; color: var(--ink-2); }
+.row.between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* The eight areas. */
+.areas h2 { font-size: 1rem; color: var(--ink-2); margin: 18px 0 4px; }
+.area { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 0 0 8px; box-shadow: var(--shadow); }
+.area.quiet { opacity: 0.72; }
+.area-head { display: flex; align-items: baseline; justify-content: space-between; }
+.area-name { font-size: 1.02rem; }
+.area-score { font-variant-numeric: tabular-nums; font-size: 1.5rem; color: var(--ember); }
+.area-score.none { color: var(--ink-3); font-size: 1.1rem; }
+.area .meta { margin: 2px 0 6px; }
+.trend { display: flex; gap: 3px; align-items: flex-end; height: 28px; margin: 4px 0 8px; }
+.trend .bar { flex: 1; background: var(--met); border-radius: 2px 2px 0 0; min-height: 2px; opacity: 0.85; }
+.trend .bar.empty { background: var(--line); }
+.area .bubble summary { list-style: none; cursor: pointer; }
+.area .bubble summary::-webkit-details-marker { display: none; }
+.area .bubble .count { color: var(--ink-3); font-size: 0.82rem; }
+.area .bubble .count::after { content: " ›"; }
+.area .bubble[open] .count::after { content: " ⌄"; }
+.area .bubble ul { margin: 6px 0 4px; padding: 6px 12px 6px 22px; background: var(--bg-3); border-radius: 10px; font-size: 0.88rem; color: var(--ink-2); }
+.area .bubble li.met { color: var(--met); }
+.area .bubble li.silence { color: var(--silence); }
+.own { display: flex; gap: 3px; align-items: center; flex-wrap: nowrap; margin-top: 6px; }
+.own .k { margin-right: 4px; color: var(--ink-3); font-size: 0.78rem; }
+button.tiny { font-size: 0.82rem; padding: 0; min-width: 25px; min-height: 30px; flex: 1 1 0; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-2); }
+button.tiny.on { background: var(--ember); border-color: var(--ember); color: #fff; }
+button.link.tiny { border: 0; background: none; min-width: 0; min-height: 0; flex: none; padding: 2px 4px; color: var(--ember); }
+
+/* Pages to check: the picture on top, the table under it, every cell his. */
+.pages h2 { font-size: 1rem; color: var(--ink-2); margin: 18px 0 4px; }
+.page { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 0 0 10px; box-shadow: var(--shadow); }
+.page-picture { display: block; width: 100%; max-height: 60vh; object-fit: contain; border-radius: 10px; background: var(--bg-3); }
+.page-head { gap: 8px; flex-wrap: wrap; }
+.page-head .field { flex: 1 1 100px; }
+.page-head input { width: 100%; box-sizing: border-box; }
+.page-table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; font-size: 0.9rem; }
+.page-table th { text-align: left; font-weight: normal; color: var(--ink-3); font-size: 0.78rem; padding: 2px 4px; }
+.page-table td { vertical-align: top; padding: 4px 4px; border-top: 1px solid var(--line); }
+.page-table input { width: 100%; box-sizing: border-box; padding: 5px 6px; font-size: 0.9rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.page-table input.narrow { width: 58px; }
+.page-table .sets { display: flex; flex-wrap: wrap; gap: 4px; }
+.page-table .sets input.set { width: 72px; font-variant-numeric: tabular-nums; }
+.page-table input.unread { border-color: var(--open); background: rgba(154, 107, 18, 0.08); }
+.unclear { margin: 4px 0 0; font-size: 0.8rem; color: var(--open); }
+.page-unclear { margin-top: 8px; }
+.page-toggle { display: block; margin-top: 6px; font-size: 0.85rem; }
